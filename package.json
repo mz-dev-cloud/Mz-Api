@@ -1,0 +1,19 @@
+{
+  "name": "mz_api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "ISC",
+  "description": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "cheerio": "^1.2.0",
+    "express": "^5.2.1"
+  }
+}
