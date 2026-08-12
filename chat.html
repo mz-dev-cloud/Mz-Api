@@ -198,15 +198,43 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 .action-btn:hover{ color:var(--accent); border-color:var(--accent);}
 .action-btn svg{ width:12px; height:12px;}
 .action-btn.copied{ color:#2f9e5c; border-color:#2f9e5c;}
-/* em telas touch não existe hover, então os botões ficam sempre
-   visíveis, só que menores, lado a lado, encostados no canto do balão */
-@media (hover:none){
+/* em telas touch não existe hover, então o botão de responder fica
+   sempre visível, só que menor, encostado no canto do balão.
+   O botão de copiar some — no celular, copiar é feito segurando a
+   mensagem (long-press) e escolhendo "Copiar mensagem" no menu.
+   Uso duas formas de detectar touch (media query + classe via JS)
+   porque alguns navegadores de celular respondem hover:hover mesmo
+   sem mouse — a classe .is-touch garante que funcione de qualquer jeito. */
+@media (hover:none), (pointer:coarse){
   .msg-actions{ opacity:1; flex-direction:row; top:-6px;}
   .msg-row.others .msg-actions{ right:-6px;}
   .msg-row.mine .msg-actions{ left:-6px;}
   .action-btn{ width:23px; height:23px;}
   .action-btn svg{ width:11px; height:11px;}
+  .copy-trigger{ display:none;}
+  .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;}
 }
+html.is-touch .msg-actions{ opacity:1; flex-direction:row; top:-6px;}
+html.is-touch .msg-row.others .msg-actions{ right:-6px;}
+html.is-touch .msg-row.mine .msg-actions{ left:-6px;}
+html.is-touch .action-btn{ width:23px; height:23px;}
+html.is-touch .action-btn svg{ width:11px; height:11px;}
+html.is-touch .copy-trigger{ display:none;}
+html.is-touch .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;}
+
+/* ---------- menu de contexto (long-press no celular) ---------- */
+.ctx-menu{
+  position:fixed; z-index:150; background:var(--panel); border:1px solid var(--border);
+  border-radius:12px; padding:6px; min-width:170px; box-shadow:0 16px 34px -14px rgba(0,0,0,.6);
+  display:none;
+}
+.ctx-menu.show{ display:block;}
+.ctx-item{
+  display:flex; align-items:center; gap:9px; width:100%; background:none; border:none;
+  color:var(--ink); padding:10px 11px; border-radius:8px; font-size:13.5px; text-align:left;
+}
+.ctx-item:active{ background:var(--bg-soft);}
+.ctx-item svg{ width:14px; height:14px; color:var(--ink-soft); flex-shrink:0;}
 
 /* ---------- barra de resposta ---------- */
 .reply-bar{
@@ -283,7 +311,31 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 .join-modal .name-warning svg{ width:11px; height:11px; vertical-align:-1px; margin-right:3px; color:var(--accent);}
 
 @media (max-width:640px){
-  .msg-row{ max-width:88%;}
+  header{ padding:12px clamp(12px,4vw,48px);}
+  .chat-title .name{ font-size:15px;}
+  .chat-title .sub{ font-size:9.5px;}
+  .icon-btn{ width:34px; height:34px;}
+
+  .chat-area{ padding:14px 10px 8px;}
+  .msg-row{ max-width:90%; gap:7px; margin-top:12px;}
+  .avatar{ width:27px; height:27px; flex:0 0 27px; font-size:11.5px;}
+  .bubble{ padding:10px 13px 8px; border-radius:16px; min-width:56px;}
+  .bubble-text{ font-size:15px; line-height:1.45;}
+  .sender-name{ font-size:10.5px;}
+  .bubble-time{ font-size:9px;}
+
+  .quote-box{ padding:6px 9px;}
+  .quote-box .q-snippet{ font-size:12px;}
+
+  .audio-player{ min-width:150px;}
+
+  .input-bar{ padding:10px 10px 14px; gap:8px;}
+  .text-input{ font-size:16px; padding:10px 14px;} /* 16px evita zoom automático no iOS */
+  .round-btn{ width:44px; height:44px;}
+}
+@media (max-width:400px){
+  .msg-row{ max-width:94%;}
+  .bubble-text{ font-size:14.5px;}
 }
 </style>
 </head>
@@ -320,6 +372,13 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 </header>
 
 <div class="join-toast-wrap" id="join-toast-wrap"></div>
+
+<div class="ctx-menu" id="ctx-menu">
+  <button class="ctx-item" id="ctx-copy" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Copiar mensagem
+  </button>
+</div>
 
 <div class="notice">as mensagens ficam disponíveis por 24 horas e depois são apagadas</div>
 
@@ -382,6 +441,13 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 (function(){
 if(window.__acervoChatBooted) return; // trava extra: nunca inicializa 2x
 window.__acervoChatBooted = true;
+
+// detecta touch via JS (mais confiável que só CSS hover:none em alguns
+// navegadores de celular) e marca a classe pra usar no CSS acima
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.documentElement.classList.add('is-touch');
+}
+
 
 /* =========================================================
    CONFIG — cole aqui os dados do seu projeto Supabase
@@ -642,7 +708,7 @@ function messageHtml(msg){
       <div class="avatar" style="background:${color.bg};color:${color.text}">${initial(msg.userName)}</div>
       <div class="msg-col">
         ${!mine ? `<span class="sender-name" style="color:${color.bg}">${escapeHtml(msg.userName)}</span>` : ''}
-        <div class="bubble" style="${bubbleStyle}">${bubbleContentHtml(msg)}</div>
+        <div class="bubble" style="${bubbleStyle}" data-id="${msg.id}" data-type="${msg.type}">${bubbleContentHtml(msg)}</div>
       </div>
       <div class="msg-actions">
         ${copyBtn}
@@ -704,6 +770,54 @@ function attachMessageHandlers(){
     });
   });
   chatArea.querySelectorAll('.audio-player').forEach(setupAudioPlayer);
+  chatArea.querySelectorAll('.bubble[data-type="text"]').forEach(setupLongPressCopy);
+}
+
+/* -------- copiar por long-press (celular) -------- */
+const ctxMenu = document.getElementById('ctx-menu');
+let ctxMsgId = null;
+function showCtxMenu(x, y){
+  ctxMenu.classList.add('show');
+  const rect = ctxMenu.getBoundingClientRect();
+  const w = rect.width || 170, h = rect.height || 46;
+  let left = Math.max(8, Math.min(x - w/2, window.innerWidth - w - 8));
+  let top = y - h - 16;
+  if(top < 60) top = y + 16;
+  ctxMenu.style.left = left+'px';
+  ctxMenu.style.top = top+'px';
+}
+function hideCtxMenu(){ ctxMenu.classList.remove('show'); ctxMsgId = null; }
+document.getElementById('ctx-copy').addEventListener('click', async ()=>{
+  const msg = visibleMessages().find(m=>m.id===ctxMsgId);
+  hideCtxMenu();
+  if(msg && msg.type === 'text') await copyToClipboard(msg.text);
+});
+document.addEventListener('touchstart', (e)=>{
+  if(ctxMenu.classList.contains('show') && !ctxMenu.contains(e.target)) hideCtxMenu();
+}, {passive:true});
+document.addEventListener('click', (e)=>{
+  if(ctxMenu.classList.contains('show') && !ctxMenu.contains(e.target)) hideCtxMenu();
+});
+chatArea.addEventListener('scroll', hideCtxMenu, {passive:true});
+
+function setupLongPressCopy(bubble){
+  if(bubble.dataset.longpressBound) return;
+  bubble.dataset.longpressBound = '1';
+  let timer = null;
+  const clear = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
+  bubble.addEventListener('touchstart', (e)=>{
+    clear();
+    const touch = e.touches[0];
+    const x = touch.clientX, y = touch.clientY;
+    timer = setTimeout(()=>{
+      ctxMsgId = bubble.dataset.id;
+      showCtxMenu(x, y);
+      if(navigator.vibrate) navigator.vibrate(10);
+    }, 480);
+  }, {passive:true});
+  bubble.addEventListener('touchend', clear, {passive:true});
+  bubble.addEventListener('touchmove', clear, {passive:true});
+  bubble.addEventListener('touchcancel', clear, {passive:true});
 }
 
 /* copia texto pro clipboard, com fallback pra navegadores/contexts sem
