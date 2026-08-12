@@ -152,10 +152,10 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
   <div class="gate-box">
     <div class="mark">✦</div>
     <h1>Painel — Acervo</h1>
-    <p>Área restrita. Digite a senha pra continuar.</p>
-    <input type="password" id="gate-input" placeholder="Senha">
+    <p>Área restrita. Entre com a sua conta.</p>
+    <input type="password" id="gate-input" placeholder="Senha da sua conta" autocomplete="current-password">
     <button id="gate-btn">Entrar</button>
-    <div class="gate-error" id="gate-error">Senha incorreta.</div>
+    <div class="gate-error" id="gate-error">Login incorreto.</div>
   </div>
 </div>
 
@@ -164,6 +164,7 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
   <div class="header-links">
     <a href="biblioteca.html">biblioteca</a>
     <a href="index.html">site</a>
+    <a href="#" id="logout-link">sair</a>
   </div>
 </header>
 
@@ -220,40 +221,26 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
 (function(){
 
 /* =========================================================
-   TROQUE AQUI A SENHA DO PAINEL
-   ========================================================= */
-const ADMIN_PASSWORD = 'trocar-esta-senha';
-const GATE_STORAGE_KEY = 'acervo_admin_gate';
-
-const gate = document.getElementById('gate');
-const gateInput = document.getElementById('gate-input');
-const gateBtn = document.getElementById('gate-btn');
-const gateError = document.getElementById('gate-error');
-
-function tryUnlock(){
-  if(gateInput.value === ADMIN_PASSWORD){
-    localStorage.setItem(GATE_STORAGE_KEY, '1');
-    gate.remove();
-    boot();
-  } else {
-    gateError.style.display = 'block';
-  }
-}
-gateBtn.addEventListener('click', tryUnlock);
-gateInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryUnlock(); });
-
-if(localStorage.getItem(GATE_STORAGE_KEY) === '1'){
-  gate.remove();
-  boot();
-}
-
-/* =========================================================
    SUPABASE — mesmo projeto usado no chat.html
    ========================================================= */
 const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbWF5aXJ1dmNmd2FrY2ptdWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0ODg5MTUsImV4cCI6MjEwMjA2NDkxNX0.bTul_H7leU6rS4qfieqLmr9mYcOhZF_4j25bT65m7lw';
 const COVER_BUCKET = 'book-covers';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* =========================================================
+   LOGIN — só esta conta consegue publicar/apagar.
+   A trava de verdade fica no Supabase (RLS), isso aqui é
+   só a tela de login. Troque a senha em
+   Supabase > Authentication > Users.
+   ========================================================= */
+const ADMIN_EMAIL = 'pastfriworld@gmail.com';
+
+const gate = document.getElementById('gate');
+const gateInput = document.getElementById('gate-input');
+const gateBtn = document.getElementById('gate-btn');
+const gateError = document.getElementById('gate-error');
+const logoutLink = document.getElementById('logout-link');
 
 const CATEGORIES = [
   {id:'acao', label:'Ação'},
@@ -274,6 +261,44 @@ function uid(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now
 
 let chapterBlocks = [];
 let coverFile = null;
+let booted = false;
+
+async function tryUnlock(){
+  gateError.style.display = 'none';
+  gateBtn.disabled = true; gateBtn.textContent = 'Entrando...';
+  const { error } = await supabase.auth.signInWithPassword({
+    email: ADMIN_EMAIL,
+    password: gateInput.value
+  });
+  gateBtn.disabled = false; gateBtn.textContent = 'Entrar';
+  if(error){
+    gateError.textContent = 'Login incorreto.';
+    gateError.style.display = 'block';
+    return;
+  }
+  gateInput.value = '';
+  gate.remove();
+  if(!booted){ booted = true; boot(); }
+}
+gateBtn.addEventListener('click', tryUnlock);
+gateInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryUnlock(); });
+
+logoutLink.addEventListener('click', async (e)=>{
+  e.preventDefault();
+  await supabase.auth.signOut();
+  location.reload();
+});
+
+/* Se já tem sessão válida (aba anterior, refresh), pula o gate.
+   Se a sessão pertencer a outro e-mail, ela não passa nas policies
+   do banco mesmo assim — mas nem deixamos passar pela UI. */
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if(session && session.user.email === ADMIN_EMAIL){
+    gate.remove();
+    if(!booted){ booted = true; boot(); }
+  }
+})();
 
 function boot(){
   const sel = document.getElementById('f-category');
