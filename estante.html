@@ -213,10 +213,13 @@ function recordRead(id){
   data[id] = entry;
   saveLeituras(data);
 }
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 1 semana
+
 function getRecentReadIds(shelfIds, limit=5){
   const data = getLeituras();
+  const cutoff = Date.now() - RECENT_WINDOW_MS;
   return Object.keys(data)
-    .filter(id => shelfIds.includes(id))
+    .filter(id => shelfIds.includes(id) && data[id].last >= cutoff)
     .sort((a,b) => data[b].last - data[a].last)
     .slice(0, limit);
 }
