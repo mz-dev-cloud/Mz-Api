@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minha estante — Acervo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0c12; --bg-soft:#171219; --panel:#1c1620;
+  --ink:#ece4d8; --ink-soft:#948b96; --ink-faint:#5c5462;
+  --accent:#c9a227; --border:rgba(236,228,216,.1);
+  --c-acao:#7a2e1f; --c-suspense:#2a3347; --c-terror:#2f3b2a;
+  --c-mais18:#4a1f2b; --c-magia:#5b3a6b; --c-romance:#7a2e3d;
+  --c-fantasia:#3a4a63; --c-documentarios:#3a3a2a; --c-ficcao:#2e4a4a;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:
+    radial-gradient(900px 500px at 12% -8%, #241b28, transparent 60%),
+    radial-gradient(700px 500px at 105% 10%, #1b2230, transparent 55%),
+    var(--bg);
+  color:var(--ink); font-family:'Inter',sans-serif;
+}
+.mono{font-family:'JetBrains Mono',monospace;}
+
+header{
+  position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
+  background:rgba(15,12,18,.75); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:16px clamp(20px,5vw,64px);
+}
+.logo{ font-family:'Fraunces',serif; font-weight:600; font-size:18px;}
+.logo a{ color:inherit; text-decoration:none; display:flex; align-items:center; gap:8px;}
+.logo .mark{ color:var(--accent); font-size:20px; line-height:1;}
+.back-link{ font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--ink-faint); text-decoration:none;}
+.back-link:hover{ color:var(--accent);}
+
+.page-head{ padding:44px clamp(20px,5vw,64px) 10px;}
+.page-head .eyebrow{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-bottom:10px; display:block;}
+.page-head h1{ font-family:'Fraunces',serif; font-weight:600; font-size:clamp(28px,4.5vw,42px); margin:0;}
+
+main{ padding:20px clamp(20px,5vw,64px) 80px;}
+
+/* ---------- seções (recentes / mais lidos / categorias) ---------- */
+.shelf-section{ margin-top:38px;}
+.shelf-section:first-child{ margin-top:0;}
+.shelf-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:16px;}
+.shelf-head h2{ font-family:'Fraunces',serif; font-weight:600; font-size:21px; margin:0;}
+.shelf-head span{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-faint);}
+.shelf-row{
+  display:flex; gap:16px; overflow-x:auto; padding-bottom:10px; scroll-snap-type:x proximity;
+}
+.shelf-row::-webkit-scrollbar{ height:6px;}
+.shelf-row::-webkit-scrollbar-thumb{ background:var(--border); border-radius:99px;}
+
+.book-block{ cursor:pointer; position:relative; flex:0 0 148px; scroll-snap-align:start;}
+.b-cover{
+  width:148px; height:210px; border-radius:8px; position:relative; overflow:hidden;
+  box-shadow:0 14px 24px -14px rgba(0,0,0,.7); display:flex; align-items:flex-end; justify-content:center;
+  text-align:center; padding:14px; transition:transform .18s ease;
+}
+.book-block:hover .b-cover{ transform:translateY(-4px);}
+.b-fallback{ font-family:'Fraunces',serif; font-weight:600; font-size:14px; color:#fff; line-height:1.25;}
+.b-title{ font-family:'Fraunces',serif; font-weight:600; font-size:13.5px; margin-top:10px; line-height:1.3;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.b-pages{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-faint); margin-top:4px;}
+.b-remove{
+  position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
+  background:rgba(0,0,0,.5); backdrop-filter:blur(3px); color:#fff; border:none; font-size:11px;
+  opacity:0; transition:opacity .15s ease; display:flex; align-items:center; justify-content:center;
+}
+.book-block:hover .b-remove{ opacity:1;}
+@media (hover:none){ .b-remove{ opacity:1;} }
+
+.empty-state{
+  text-align:center; padding:70px 20px;
+}
+.empty-state p{ color:var(--ink-faint); font-size:14px; margin-bottom:22px;}
+.empty-state a{
+  background:var(--accent); color:#171219; border:none; padding:13px 30px; border-radius:999px;
+  font-weight:600; font-size:13.5px; text-decoration:none;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><a href="index.html"><span class="mark">✦</span> Acervo</a></div>
+  <a class="back-link" href="biblioteca.html">← voltar à biblioteca</a>
+</header>
+
+<div class="page-head">
+  <span class="eyebrow">sua estante</span>
+  <h1>Livros salvos</h1>
+</div>
+
+<main id="main"></main>
+
+<script>
+const CATEGORIES = [
+  {id:'acao', label:'Ação'}, {id:'suspense', label:'Suspense'}, {id:'terror', label:'Terror'},
+  {id:'mais18', label:'+18'}, {id:'magia', label:'Magia'}, {id:'romance', label:'Romance'},
+  {id:'fantasia', label:'Fantasia'}, {id:'documentarios', label:'Documentários'}, {id:'ficcao', label:'Ficção'},
+];
+
+const BOOKS = [
+  {id:'b1', title:'Fogo Sob a Cidade', author:'Rafael Duque', category:'acao', pages:212},
+  {id:'b2', title:'Sete Chaves para Nenhuma Porta', author:'Iris Vantana', category:'suspense', pages:184},
+  {id:'b3', title:'O Que Mora no Poço', author:'Théo Barbosa', category:'terror', pages:96},
+  {id:'b4', title:'Depois da Meia-Noite', author:'Carla Nunes', category:'mais18', pages:230},
+  {id:'b5', title:'O Reino Sob as Raízes', author:'Davi Serqueira', category:'magia', pages:301},
+  {id:'b6', title:'A Última Carta de Inverno', author:'Marina Coelho', category:'romance', pages:168},
+  {id:'b7', title:'As Crônicas de Aslerin', author:'Bento Ferraz', category:'fantasia', pages:412},
+  {id:'b8', title:'Vozes do Vale Esquecido', author:'Luiza Amaral', category:'documentarios', pages:140},
+  {id:'b9', title:'A Máquina que Sonhava', author:'Pedro Aveiro', category:'ficcao', pages:256},
+  {id:'b10', title:'Cidade de Vidro Partido', author:'Rafael Duque', category:'suspense', pages:198},
+  {id:'b11', title:'Todo Domingo às Seis', author:'Helena Prado', category:'ficcao', pages:176},
+  {id:'b12', title:'O Chamado da Névoa', author:'Iris Vantana', category:'terror', pages:120},
+];
+
+/* ---------------- ESTANTE (cookie) ---------------- */
+function getCookie(name){
+  const match = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+function setCookie(name, value, days){
+  const d = new Date(); d.setTime(d.getTime() + days*24*60*60*1000);
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/;SameSite=Lax`;
+}
+function getEstante(){
+  const raw = getCookie('acervo_estante');
+  return raw ? raw.split(',').filter(Boolean) : [];
+}
+function saveEstante(ids){ setCookie('acervo_estante', ids.join(','), 365); }
+
+/* ---------------- HISTÓRICO DE LEITURA (localStorage) ----------------
+   Cada vez que o livro é aberto (clique -> leitor.html), registramos
+   quantas vezes foi lido e quando foi a última leitura. Usado nas
+   seções "Lido recentemente" e "Mais lidos". */
+function getLeituras(){
+  try{ return JSON.parse(localStorage.getItem('acervo_leituras') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveLeituras(data){ localStorage.setItem('acervo_leituras', JSON.stringify(data)); }
+function recordRead(id){
+  const data = getLeituras();
+  const entry = data[id] || {count:0, last:0};
+  entry.count += 1;
+  entry.last = Date.now();
+  data[id] = entry;
+  saveLeituras(data);
+}
+function getRecentReadIds(shelfIds, limit=8){
+  const data = getLeituras();
+  return Object.keys(data)
+    .filter(id => shelfIds.includes(id))
+    .sort((a,b) => data[b].last - data[a].last)
+    .slice(0, limit);
+}
+function getMostReadIds(shelfIds, limit=8){
+  const data = getLeituras();
+  return Object.keys(data)
+    .filter(id => shelfIds.includes(id) && data[id].count > 0)
+    .sort((a,b) => data[b].count - data[a].count)
+    .slice(0, limit);
+}
+
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function coverStyle(catId){ return `background:linear-gradient(160deg, var(--c-${catId}), #14101a);`; }
+
+function bookBlockHtml(book){
+  return `
+    <div class="book-block" data-id="${book.id}">
+      <div class="b-cover" style="${coverStyle(book.category)}">
+        <span class="b-fallback">${escapeHtml(book.title)}</span>
+        <button class="b-remove" data-remove="${book.id}" aria-label="Remover da estante">✕</button>
+      </div>
+      <div class="b-title">${escapeHtml(book.title)}</div>
+      <div class="b-pages">${book.pages} páginas</div>
+    </div>
+  `;
+}
+
+function sectionHtml(title, books){
+  return `
+    <section class="shelf-section">
+      <div class="shelf-head"><h2>${escapeHtml(title)}</h2><span>${books.length} título${books.length===1?'':'s'}</span></div>
+      <div class="shelf-row">${books.map(bookBlockHtml).join('')}</div>
+    </section>
+  `;
+}
+
+function render(){
+  const main = document.getElementById('main');
+  const ids = getEstante();
+  const books = BOOKS.filter(b => ids.includes(b.id));
+
+  if(books.length === 0){
+    main.innerHTML = `<div class="empty-state">
+      <p>Sua estante está vazia por enquanto.</p>
+      <a href="biblioteca.html">Explorar biblioteca</a>
+    </div>`;
+    return;
+  }
+
+  let html = '';
+
+  const recentIds = getRecentReadIds(ids);
+  if(recentIds.length){
+    const recentBooks = recentIds.map(id => books.find(b => b.id === id)).filter(Boolean);
+    html += sectionHtml('Lido recentemente', recentBooks);
+  }
+
+  const mostIds = getMostReadIds(ids);
+  if(mostIds.length){
+    const mostBooks = mostIds.map(id => books.find(b => b.id === id)).filter(Boolean);
+    html += sectionHtml('Mais lidos', mostBooks);
+  }
+
+  CATEGORIES.forEach(cat => {
+    const catBooks = books.filter(b => b.category === cat.id);
+    if(catBooks.length === 0) return;
+    html += sectionHtml(cat.label, catBooks);
+  });
+
+  main.innerHTML = html;
+  attachHandlers();
+}
+
+function attachHandlers(){
+  document.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.remove;
+      saveEstante(getEstante().filter(x => x !== id));
+      const leituras = getLeituras();
+      delete leituras[id];
+      saveLeituras(leituras);
+      render();
+    });
+  });
+
+  document.querySelectorAll('.book-block').forEach(el => {
+    el.addEventListener('click', () => {
+      recordRead(el.dataset.id);
+      window.location.href = `leitor.html?book=${el.dataset.id}`;
+    });
+  });
+}
+
+render();
+</script>
+</body>
+</html>
