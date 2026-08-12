@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel — Acervo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0f0c12; --bg-soft:#171219; --panel:#1c1620;
+  --ink:#ece4d8; --ink-soft:#948b96; --ink-faint:#5c5462;
+  --accent:#c9a227; --border:rgba(236,228,216,.1); --danger:#c24444;
+  --c-acao:#7a2e1f; --c-suspense:#2a3347; --c-terror:#2f3b2a;
+  --c-mais18:#4a1f2b; --c-magia:#5b3a6b; --c-romance:#7a2e3d;
+  --c-fantasia:#3a4a63; --c-documentarios:#3a3a2a; --c-ficcao:#2e4a4a;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; min-height:100vh; background:
+    radial-gradient(900px 500px at 12% -8%, #241b28, transparent 60%),
+    radial-gradient(700px 500px at 105% 10%, #1b2230, transparent 55%),
+    var(--bg);
+  color:var(--ink); font-family:'Inter',sans-serif;
+}
+.mono{font-family:'JetBrains Mono',monospace;}
+button{font-family:inherit; cursor:pointer;}
+input,textarea,select{font-family:inherit;}
+
+/* ---------- gate de senha ---------- */
+.gate{ position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px;}
+.gate-box{ width:100%; max-width:340px; text-align:center;}
+.gate-box .mark{ color:var(--accent); font-size:26px;}
+.gate-box h1{ font-family:'Fraunces',serif; font-size:22px; margin:14px 0 6px;}
+.gate-box p{ color:var(--ink-soft); font-size:13px; margin:0 0 22px;}
+.gate-box input{
+  width:100%; background:var(--panel); border:1px solid var(--border); color:var(--ink);
+  padding:13px 16px; border-radius:12px; font-size:14px; text-align:center; margin-bottom:12px;
+}
+.gate-box input:focus{ outline:none; border-color:var(--accent);}
+.gate-box button{
+  width:100%; background:var(--accent); color:#171219; border:none; padding:13px; border-radius:12px;
+  font-weight:600; font-size:14px;
+}
+.gate-error{ color:var(--danger); font-size:12px; margin-top:10px; display:none;}
+
+/* ---------- header ---------- */
+header{
+  position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
+  background:rgba(15,12,18,.75); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:16px clamp(20px,5vw,64px);
+}
+.logo{ font-family:'Fraunces',serif; font-weight:600; font-size:18px; display:flex; align-items:center; gap:8px;}
+.logo .mark{ color:var(--accent); font-size:20px; line-height:1;}
+.logo .tag{ font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-faint); border:1px solid var(--border); padding:2px 8px; border-radius:999px; margin-left:6px;}
+.header-links{ display:flex; gap:18px; align-items:center;}
+.header-links a{ color:var(--ink-soft); font-family:'JetBrains Mono',monospace; font-size:11.5px; text-decoration:none;}
+.header-links a:hover{ color:var(--accent);}
+
+main{ max-width:760px; margin:0 auto; padding:36px clamp(20px,5vw,40px) 100px;}
+h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px; margin:0 0 4px;}
+.section-sub{ color:var(--ink-faint); font-size:12.5px; margin:0 0 24px; font-family:'JetBrains Mono',monospace;}
+
+/* ---------- formulário ---------- */
+.card{ background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:26px;}
+.field{ margin-bottom:20px;}
+.field label{ display:block; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px;}
+.field input[type=text], .field textarea, .field select{
+  width:100%; background:var(--bg-soft); border:1px solid var(--border); color:var(--ink);
+  padding:12px 14px; border-radius:10px; font-size:14px;
+}
+.field textarea{ resize:vertical; min-height:90px; line-height:1.5;}
+.field input:focus, .field textarea:focus, .field select:focus{ outline:none; border-color:var(--accent);}
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+@media (max-width:560px){ .field-row{ grid-template-columns:1fr;} }
+
+/* upload de capa */
+.cover-upload{ display:flex; gap:16px; align-items:center;}
+.cover-preview{
+  width:90px; height:128px; border-radius:8px; flex:0 0 90px; overflow:hidden; position:relative;
+  background:var(--bg-soft); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+}
+.cover-preview img{ width:100%; height:100%; object-fit:cover;}
+.cover-preview .ph{ color:var(--ink-faint); font-size:10px; text-align:center; font-family:'JetBrains Mono',monospace; padding:8px;}
+.file-btn{
+  background:var(--bg-soft); border:1px solid var(--border); color:var(--ink-soft);
+  padding:10px 16px; border-radius:10px; font-size:12.5px; display:inline-block;
+}
+.file-btn:hover{ border-color:var(--accent); color:var(--accent);}
+.cover-upload input[type=file]{ display:none;}
+
+/* capítulos */
+.chapters-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px;}
+.chapter-item{ background:var(--bg-soft); border:1px solid var(--border); border-radius:12px; padding:16px;}
+.chapter-item-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.chapter-item-head span{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent);}
+.chapter-remove{
+  background:none; border:none; color:var(--ink-faint); font-size:12px; padding:4px;
+}
+.chapter-remove:hover{ color:var(--danger);}
+.chapter-item textarea{ min-height:120px;}
+.add-chapter-btn{
+  width:100%; background:none; border:1px dashed var(--border); color:var(--ink-soft);
+  padding:12px; border-radius:10px; font-size:13px; margin-bottom:22px;
+}
+.add-chapter-btn:hover{ border-color:var(--accent); color:var(--accent);}
+
+.submit-btn{
+  background:var(--accent); color:#171219; border:none; padding:14px 30px; border-radius:999px;
+  font-weight:600; font-size:14px; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.submit-btn:disabled{ opacity:.6; cursor:not-allowed;}
+.form-msg{ text-align:center; font-size:12.5px; margin-top:14px; font-family:'JetBrains Mono',monospace; display:none;}
+.form-msg.ok{ color:#5cbd82; display:block;}
+.form-msg.err{ color:var(--danger); display:block;}
+
+/* ---------- lista de publicados ---------- */
+.pub-section{ margin-top:56px;}
+.pub-list{ display:flex; flex-direction:column; gap:12px; margin-top:20px;}
+.pub-book{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+.pub-book-head{ display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer;}
+.pub-cover{ width:44px; height:62px; border-radius:6px; flex:0 0 44px; overflow:hidden; background:var(--bg-soft);}
+.pub-cover img{ width:100%; height:100%; object-fit:cover;}
+.pub-info{ flex:1; min-width:0;}
+.pub-title{ font-family:'Fraunces',serif; font-weight:600; font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.pub-meta{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-faint); margin-top:2px;}
+.pub-actions{ display:flex; gap:8px; flex:0 0 auto;}
+.pub-chevron{ transition:transform .18s ease; color:var(--ink-faint);}
+.pub-book.open .pub-chevron{ transform:rotate(90deg);}
+.icon-btn-sm{
+  width:32px; height:32px; border-radius:50%; border:1px solid var(--border); background:none;
+  display:flex; align-items:center; justify-content:center; color:var(--ink-faint);
+}
+.icon-btn-sm:hover{ border-color:var(--danger); color:var(--danger);}
+.icon-btn-sm svg{ width:14px; height:14px;}
+.pub-chapters{ display:none; flex-direction:column; gap:8px; padding:0 16px 16px 74px;}
+.pub-book.open .pub-chapters{ display:flex;}
+.pub-chapter-block{
+  background:var(--bg-soft); border:1px solid var(--border); border-radius:8px;
+  padding:9px 12px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.empty-pub{ text-align:center; color:var(--ink-faint); font-size:13px; padding:40px 0;}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-box">
+    <div class="mark">✦</div>
+    <h1>Painel — Acervo</h1>
+    <p>Área restrita. Digite a senha pra continuar.</p>
+    <input type="password" id="gate-input" placeholder="Senha">
+    <button id="gate-btn">Entrar</button>
+    <div class="gate-error" id="gate-error">Senha incorreta.</div>
+  </div>
+</div>
+
+<header>
+  <div class="logo"><span class="mark">✦</span> Acervo <span class="tag">painel</span></div>
+  <div class="header-links">
+    <a href="biblioteca.html">biblioteca</a>
+    <a href="index.html">site</a>
+  </div>
+</header>
+
+<main>
+  <h2 class="section-title">Publicar livro</h2>
+  <p class="section-sub">preencha os dados e adicione quantos capítulos quiser</p>
+
+  <div class="card">
+    <div class="field">
+      <label>Título do livro</label>
+      <input type="text" id="f-title" placeholder="Ex: Fogo Sob a Cidade">
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Categoria</label>
+        <select id="f-category"></select>
+      </div>
+      <div class="field">
+        <label>Capa</label>
+        <div class="cover-upload">
+          <div class="cover-preview" id="cover-preview"><span class="ph">sem capa</span></div>
+          <label class="file-btn">
+            Escolher imagem
+            <input type="file" id="f-cover" accept="image/*">
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Resumo</label>
+      <textarea id="f-summary" placeholder="Resumo curto que aparece no card do livro..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Capítulos (texto puro)</label>
+      <div class="chapters-list" id="chapters-list"></div>
+      <button class="add-chapter-btn" id="add-chapter-btn">+ Adicionar capítulo</button>
+    </div>
+
+    <button class="submit-btn" id="publish-btn">Publicar livro</button>
+    <div class="form-msg" id="form-msg"></div>
+  </div>
+
+  <div class="pub-section">
+    <h2 class="section-title">Livros publicados</h2>
+    <p class="section-sub">clique num livro pra ver os capítulos</p>
+    <div class="pub-list" id="pub-list"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+
+/* =========================================================
+   TROQUE AQUI A SENHA DO PAINEL
+   ========================================================= */
+const ADMIN_PASSWORD = 'trocar-esta-senha';
+const GATE_STORAGE_KEY = 'acervo_admin_gate';
+
+const gate = document.getElementById('gate');
+const gateInput = document.getElementById('gate-input');
+const gateBtn = document.getElementById('gate-btn');
+const gateError = document.getElementById('gate-error');
+
+function tryUnlock(){
+  if(gateInput.value === ADMIN_PASSWORD){
+    localStorage.setItem(GATE_STORAGE_KEY, '1');
+    gate.remove();
+    boot();
+  } else {
+    gateError.style.display = 'block';
+  }
+}
+gateBtn.addEventListener('click', tryUnlock);
+gateInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryUnlock(); });
+
+if(localStorage.getItem(GATE_STORAGE_KEY) === '1'){
+  gate.remove();
+  boot();
+}
+
+/* =========================================================
+   SUPABASE — mesmo projeto usado no chat.html
+   ========================================================= */
+const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbWF5aXJ1dmNmd2FrY2ptdWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0ODg5MTUsImV4cCI6MjEwMjA2NDkxNX0.bTul_H7leU6rS4qfieqLmr9mYcOhZF_4j25bT65m7lw';
+const COVER_BUCKET = 'book-covers';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CATEGORIES = [
+  {id:'acao', label:'Ação'},
+  {id:'suspense', label:'Suspense'},
+  {id:'terror', label:'Terror'},
+  {id:'mais18', label:'+18'},
+  {id:'magia', label:'Magia'},
+  {id:'romance', label:'Romance'},
+  {id:'fantasia', label:'Fantasia'},
+  {id:'documentarios', label:'Documentários'},
+  {id:'ficcao', label:'Ficção'},
+];
+
+function labelFor(catId){ return (CATEGORIES.find(c=>c.id===catId)||{}).label || catId; }
+function coverStyle(catId){ return `background:linear-gradient(160deg, var(--c-${catId}), #14101a);`; }
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function uid(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2); }
+
+let chapterBlocks = [];
+let coverFile = null;
+
+function boot(){
+  const sel = document.getElementById('f-category');
+  sel.innerHTML = CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+
+  document.getElementById('f-cover').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    coverFile = file;
+    const url = URL.createObjectURL(file);
+    document.getElementById('cover-preview').innerHTML = `<img src="${url}">`;
+  });
+
+  document.getElementById('add-chapter-btn').addEventListener('click', addChapterBlock);
+  document.getElementById('publish-btn').addEventListener('click', publishBook);
+
+  addChapterBlock(); // começa com 1 capítulo
+  loadBooks();
+}
+
+function addChapterBlock(){
+  const id = uid();
+  chapterBlocks.push(id);
+  renderChapterBlocks();
+}
+function removeChapterBlock(id){
+  chapterBlocks = chapterBlocks.filter(x => x !== id);
+  renderChapterBlocks();
+}
+function renderChapterBlocks(){
+  const wrap = document.getElementById('chapters-list');
+  const prevValues = {};
+  wrap.querySelectorAll('.chapter-item').forEach(el=>{
+    prevValues[el.dataset.id] = el.querySelector('textarea').value;
+  });
+  wrap.innerHTML = chapterBlocks.map((id, i) => `
+    <div class="chapter-item" data-id="${id}">
+      <div class="chapter-item-head">
+        <span>Capítulo ${i+1}</span>
+        ${chapterBlocks.length > 1 ? `<button class="chapter-remove" data-remove="${id}">remover</button>` : ''}
+      </div>
+      <textarea placeholder="Cole ou digite o texto do capítulo aqui...">${escapeHtml(prevValues[id] || '')}</textarea>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.addEventListener('click', ()=> removeChapterBlock(btn.dataset.remove));
+  });
+}
+
+function showFormMsg(text, ok){
+  const el = document.getElementById('form-msg');
+  el.textContent = text;
+  el.className = 'form-msg ' + (ok ? 'ok' : 'err');
+}
+
+async function publishBook(){
+  const title = document.getElementById('f-title').value.trim();
+  const category = document.getElementById('f-category').value;
+  const summary = document.getElementById('f-summary').value.trim();
+  const chapterTexts = Array.from(document.querySelectorAll('.chapter-item')).map(el => el.querySelector('textarea').value.trim());
+
+  if(!title){ showFormMsg('Coloca um título.', false); return; }
+  if(chapterTexts.every(t => !t)){ showFormMsg('Coloca o texto de pelo menos um capítulo.', false); return; }
+
+  const btn = document.getElementById('publish-btn');
+  btn.disabled = true; btn.textContent = 'Publicando...';
+
+  try{
+    let coverUrl = null;
+    if(coverFile){
+      const path = `${uid()}-${coverFile.name}`;
+      const { error: upErr } = await supabase.storage.from(COVER_BUCKET).upload(path, coverFile);
+      if(upErr) throw upErr;
+      coverUrl = supabase.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
+    }
+
+    const { data: bookRow, error: bookErr } = await supabase
+      .from('books')
+      .insert({ title, category, summary, cover_url: coverUrl })
+      .select().single();
+    if(bookErr) throw bookErr;
+
+    const chapterRows = chapterTexts
+      .map((content, i) => ({ book_id: bookRow.id, chapter_number: i+1, content }))
+      .filter(c => c.content);
+    if(chapterRows.length){
+      const { error: chErr } = await supabase.from('book_chapters').insert(chapterRows);
+      if(chErr) throw chErr;
+    }
+
+    showFormMsg('Livro publicado!', true);
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-summary').value = '';
+    document.getElementById('cover-preview').innerHTML = '<span class="ph">sem capa</span>';
+    coverFile = null;
+    document.getElementById('f-cover').value = '';
+    chapterBlocks = [];
+    addChapterBlock();
+    loadBooks();
+  } catch(err){
+    console.error(err);
+    showFormMsg('Erro ao publicar. Veja o console.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Publicar livro';
+  }
+}
+
+/* ---------------- lista de publicados ---------------- */
+async function loadBooks(){
+  const list = document.getElementById('pub-list');
+  list.innerHTML = `<div class="empty-pub">Carregando...</div>`;
+
+  const { data: books, error } = await supabase.from('books').select('*').order('created_at', { ascending:false });
+  if(error){ list.innerHTML = `<div class="empty-pub">Erro ao carregar livros.</div>`; console.error(error); return; }
+  if(!books.length){ list.innerHTML = `<div class="empty-pub">Nenhum livro publicado ainda.</div>`; return; }
+
+  const { data: chapters } = await supabase.from('book_chapters').select('*').order('chapter_number', { ascending:true });
+  const chByBook = {};
+  (chapters||[]).forEach(c => { (chByBook[c.book_id] = chByBook[c.book_id] || []).push(c); });
+
+  list.innerHTML = books.map(b => pubBookHtml(b, chByBook[b.id] || [])).join('');
+  attachPubHandlers(books, chByBook);
+}
+
+function pubBookHtml(book, chapters){
+  return `
+    <div class="pub-book" data-id="${book.id}">
+      <div class="pub-book-head" data-toggle="${book.id}">
+        <div class="pub-cover" style="${coverStyle(book.category)}">
+          ${book.cover_url ? `<img src="${book.cover_url}">` : ''}
+        </div>
+        <div class="pub-info">
+          <div class="pub-title">${escapeHtml(book.title)}</div>
+          <div class="pub-meta">${labelFor(book.category)} · ${chapters.length} capítulo${chapters.length===1?'':'s'}</div>
+        </div>
+        <div class="pub-actions">
+          <button class="icon-btn-sm" data-delete="${book.id}" title="Apagar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+          </button>
+          <span class="pub-chevron">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </span>
+        </div>
+      </div>
+      ${chapters.length > 1 ? `<div class="pub-chapters">${chapters.map(c => `<div class="pub-chapter-block">Capítulo ${c.chapter_number}</div>`).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+function attachPubHandlers(books, chByBook){
+  document.querySelectorAll('[data-toggle]').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-delete]')) return;
+      const book = books.find(b => b.id === el.dataset.toggle);
+      if((chByBook[book.id] || []).length <= 1) return;
+      el.closest('.pub-book').classList.toggle('open');
+    });
+  });
+  document.querySelectorAll('[data-delete]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const id = btn.dataset.delete;
+      if(!confirm('Apagar este livro e todos os capítulos dele?')) return;
+      const { error } = await supabase.from('books').delete().eq('id', id);
+      if(error){ alert('Erro ao apagar.'); console.error(error); return; }
+      loadBooks();
+    });
+  });
+}
+
+})();
+</script>
+</body>
+</html>
