@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -8,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0f0c12; --bg-soft:#171219; --panel:#1c1620;
@@ -314,10 +314,16 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 
 <script>
 /* =========================================================
-   CONFIG
+   CONFIG — cole aqui os dados do seu projeto Supabase
+   (Project Settings > API)
    ========================================================= */
+const SUPABASE_URL = 'https://SEU-PROJETO.supabase.co';
+const SUPABASE_ANON_KEY = 'SUA-ANON-KEY-AQUI';
+const AUDIO_BUCKET = 'chat-audio';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const CHAT_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
-const STORAGE_MSGS = 'acervo_chat_messages';
 const STORAGE_USER = 'acervo_chat_user';
 
 const BUBBLE_COLORS = [
@@ -386,26 +392,60 @@ if(!currentUser){
   joinName.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !joinBtn.disabled) joinBtn.click(); });
 } else {
   joinOverlay.remove();
-  initChat();
+  setTimeout(initChat, 0); // espera o resto do script (mais abaixo) terminar de carregar
 }
 
 /* =========================================================
-   MENSAGENS (localStorage — troque por chamadas a um backend
-   real, ex. Supabase, para funcionar entre pessoas/dispositivos)
+   MENSAGENS (Supabase — banco real + realtime, funciona
+   entre pessoas/dispositivos diferentes)
    ========================================================= */
-function getAllMessages(){
-  try{ return JSON.parse(localStorage.getItem(STORAGE_MSGS)) || []; }catch(e){ return []; }
+const messagesById = new Map(); // cache local, alimentado pelo fetch inicial + realtime
+
+function rowToMsg(row){
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.user_name,
+    userColor: row.user_color,
+    type: row.type,
+    text: row.text_content,
+    audio: row.audio_url,
+    duration: row.duration,
+    replyTo: row.reply_to,
+    ts: new Date(row.created_at).getTime(),
+  };
 }
-function saveAllMessages(list){ localStorage.setItem(STORAGE_MSGS, JSON.stringify(list)); }
-function purgeExpired(){
+
+async function loadInitialMessages(){
+  const cutoffIso = new Date(Date.now() - CHAT_TTL_MS).toISOString();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .gte('created_at', cutoffIso)
+    .order('created_at', { ascending: true });
+  if(error){ console.error('Erro ao carregar mensagens:', error); return; }
+  data.forEach(row => messagesById.set(row.id, rowToMsg(row)));
+}
+
+function subscribeRealtime(){
+  supabase
+    .channel('chat_messages_changes')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+      messagesById.set(payload.new.id, rowToMsg(payload.new));
+      render();
+    })
+    .subscribe();
+}
+
+function purgeExpiredLocal(){
   const cutoff = Date.now() - CHAT_TTL_MS;
-  const list = getAllMessages().filter(m => m.ts >= cutoff);
-  saveAllMessages(list);
-  return list;
+  messagesById.forEach((m, id) => { if(m.ts < cutoff) messagesById.delete(id); });
 }
 function visibleMessages(){
-  const all = purgeExpired();
-  return all.filter(m => m.ts >= currentUser.joinedAt);
+  purgeExpiredLocal();
+  return Array.from(messagesById.values())
+    .filter(m => m.ts >= currentUser.joinedAt)
+    .sort((a,b) => a.ts - b.ts);
 }
 
 function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
@@ -549,32 +589,48 @@ document.getElementById('rb-close').addEventListener('click', cancelReply);
 /* =========================================================
    ENVIO DE MENSAGENS
    ========================================================= */
-function pushMessage(msg){
-  const list = purgeExpired();
-  list.push(msg);
-  saveAllMessages(list);
+async function insertMessageRow(row){
+  // mostra a mensagem na hora, sem esperar a rede (otimista)
+  messagesById.set(row.id, rowToMsg({ ...row, created_at: new Date().toISOString() }));
+  render();
+  const { error } = await supabase.from('chat_messages').insert(row);
+  if(error){
+    console.error('Erro ao enviar mensagem:', error);
+    messagesById.delete(row.id);
+    render();
+    alert('Não foi possível enviar a mensagem. Verifique sua conexão.');
+  }
 }
 function sendText(){
   const input = document.getElementById('text-input');
   const text = input.value.trim();
   if(!text) return;
-  pushMessage({
-    id: uid(), userId: currentUser.id, userName: currentUser.name, userColor: currentUser.colorId,
-    type:'text', text, replyTo: replyingTo, ts: Date.now(),
+  insertMessageRow({
+    id: uid(), user_id: currentUser.id, user_name: currentUser.name, user_color: currentUser.colorId,
+    type: 'text', text_content: text, reply_to: replyingTo,
   });
   input.value = '';
   autosize(input);
   cancelReply();
   toggleSendMic();
-  render();
 }
-function sendAudio(base64, duration){
-  pushMessage({
-    id: uid(), userId: currentUser.id, userName: currentUser.name, userColor: currentUser.colorId,
-    type:'audio', audio: base64, duration, replyTo: replyingTo, ts: Date.now(),
+async function sendAudio(blob, duration){
+  const id = uid();
+  const path = `${currentUser.id}/${id}.webm`;
+  const { error: uploadError } = await supabase.storage.from(AUDIO_BUCKET).upload(path, blob, {
+    contentType: 'audio/webm',
+  });
+  if(uploadError){
+    console.error('Erro ao enviar áudio:', uploadError);
+    alert('Não foi possível enviar o áudio. Verifique sua conexão.');
+    return;
+  }
+  const { data: pub } = supabase.storage.from(AUDIO_BUCKET).getPublicUrl(path);
+  insertMessageRow({
+    id, user_id: currentUser.id, user_name: currentUser.name, user_color: currentUser.colorId,
+    type: 'audio', audio_url: pub.publicUrl, duration, reply_to: replyingTo,
   });
   cancelReply();
-  render();
 }
 
 const textInput = document.getElementById('text-input');
@@ -618,9 +674,7 @@ async function startRecording(){
       if(discardRecording) return;
       const blob = new Blob(audioChunks, {type:'audio/webm'});
       const duration = (Date.now() - recStart) / 1000;
-      const reader = new FileReader();
-      reader.onload = ()=> sendAudio(reader.result, duration);
-      reader.readAsDataURL(blob);
+      sendAudio(blob, duration);
     };
     mediaRecorder.start();
     recStart = Date.now();
@@ -669,13 +723,16 @@ document.getElementById('name-save').addEventListener('click', ()=>{
 /* =========================================================
    INIT
    ========================================================= */
-function initChat(){
+async function initChat(){
   buildSwatches(document.getElementById('color-row'), currentUser.colorId, (id)=>{
     currentUser.colorId = id; saveUser(currentUser); render();
   });
   document.getElementById('name-input').value = currentUser.name;
-  render();
   toggleSendMic();
+  chatArea.innerHTML = `<div class="empty-chat">Carregando conversa…</div>`;
+  await loadInitialMessages();
+  subscribeRealtime();
+  render();
   setInterval(render, 60 * 1000); // remove mensagens expiradas ao vivo
 }
 </script>
