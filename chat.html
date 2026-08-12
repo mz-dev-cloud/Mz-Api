@@ -314,6 +314,18 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 
 <script>
 /* =========================================================
+   Tudo dentro de uma IIFE: evita que "const supabase" (ou
+   qualquer outra variável) vaze pro escopo global e cause o
+   erro "Identifier 'supabase' has already been declared" caso
+   este <script> acabe rodando mais de uma vez na mesma página
+   (ex: navegação sem reload completo, cache de service worker,
+   ou o bloco de script duplicado sem querer no HTML).
+   ========================================================= */
+(function(){
+if(window.__acervoChatBooted) return; // trava extra: nunca inicializa 2x
+window.__acervoChatBooted = true;
+
+/* =========================================================
    CONFIG — cole aqui os dados do seu projeto Supabase
    (Project Settings > API)
    ========================================================= */
@@ -541,12 +553,14 @@ function attachMessageHandlers(){
 }
 
 /* -------- player de áudio -------- */
+const allAudioEls = []; // guarda todos os players criados p/ pausar os outros ao tocar um novo
 function setupAudioPlayer(el){
   if(el.dataset.bound) return;
   el.dataset.bound = '1';
   const src = el.dataset.audioSrc;
   const storedDuration = parseFloat(el.dataset.audioDuration) || 0;
   const audio = new Audio(src);
+  allAudioEls.push(audio);
   const playBtn = el.querySelector('.audio-play');
   const iconPlay = el.querySelector('.icon-play');
   const iconPause = el.querySelector('.icon-pause');
@@ -554,7 +568,7 @@ function setupAudioPlayer(el){
   const timeLabel = el.querySelector('.audio-time');
 
   playBtn.addEventListener('click', ()=>{
-    document.querySelectorAll('audio').forEach(a=>{ if(a !== audio) a.pause(); });
+    allAudioEls.forEach(a=>{ if(a !== audio) a.pause(); });
     if(audio.paused){ audio.play(); iconPlay.style.display='none'; iconPause.style.display='block'; }
     else { audio.pause(); iconPlay.style.display='block'; iconPause.style.display='none'; }
   });
@@ -735,6 +749,8 @@ async function initChat(){
   render();
   setInterval(render, 60 * 1000); // remove mensagens expiradas ao vivo
 }
+
+})(); // fim da IIFE
 </script>
 </body>
 </html>
