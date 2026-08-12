@@ -84,6 +84,26 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 .name-field button{
   background:var(--accent); color:#171219; border:none; border-radius:8px; padding:0 12px; font-size:11.5px; font-weight:600;
 }
+.settings-divider{ height:1px; background:var(--border); margin:16px 0;}
+.clear-chat-btn{
+  width:100%; background:none; border:1px solid var(--danger); color:var(--danger);
+  border-radius:8px; padding:9px; font-size:11.5px; font-weight:600; letter-spacing:.01em;
+}
+.clear-chat-btn:hover{ background:rgba(194,68,68,.12);}
+
+/* ---------- toast: alguém entrou no chat ---------- */
+.join-toast-wrap{
+  position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:80;
+  display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none;
+}
+.join-toast{
+  display:flex; align-items:center; gap:7px; padding:7px 14px; border-radius:999px;
+  background:var(--panel); border:1px solid var(--border); color:var(--ink);
+  font-family:'JetBrains Mono',monospace; font-size:11px; box-shadow:0 10px 24px -12px rgba(0,0,0,.5);
+  opacity:0; transform:translateY(-8px); transition:opacity .25s ease, transform .25s ease;
+}
+.join-toast.show{ opacity:1; transform:translateY(0);}
+.join-toast .dot{ width:7px; height:7px; border-radius:50%; background:#2f9e5c; flex-shrink:0;}
 
 /* ---------- banner de expiração ---------- */
 .notice{
@@ -163,22 +183,29 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 .audio-fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:currentColor; border-radius:99px;}
 .audio-time{ font-family:'JetBrains Mono',monospace; font-size:10px; opacity:.75; flex-shrink:0; min-width:32px;}
 
-.reply-trigger{
-  position:absolute; top:2px; width:26px; height:26px; border-radius:50%; border:none;
-  background:var(--panel); border:1px solid var(--border); color:var(--ink-faint);
-  display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .14s ease;
+.msg-actions{
+  position:absolute; top:2px; display:flex; flex-direction:column; gap:6px;
+  opacity:0; transition:opacity .14s ease;
 }
-.msg-row.others .reply-trigger{ right:-32px;}
-.msg-row.mine .reply-trigger{ left:-32px;}
-.msg-row:hover .reply-trigger{ opacity:1;}
-.reply-trigger svg{ width:12px; height:12px;}
-/* em telas touch não existe hover, então o botão de responder fica
-   sempre visível, só que menor e encostado no canto do balão */
+.msg-row.others .msg-actions{ right:-32px;}
+.msg-row.mine .msg-actions{ left:-32px;}
+.msg-row:hover .msg-actions{ opacity:1;}
+.action-btn{
+  width:26px; height:26px; border-radius:50%; border:none; flex-shrink:0;
+  background:var(--panel); border:1px solid var(--border); color:var(--ink-faint);
+  display:flex; align-items:center; justify-content:center;
+}
+.action-btn:hover{ color:var(--accent); border-color:var(--accent);}
+.action-btn svg{ width:12px; height:12px;}
+.action-btn.copied{ color:#2f9e5c; border-color:#2f9e5c;}
+/* em telas touch não existe hover, então os botões ficam sempre
+   visíveis, só que menores, lado a lado, encostados no canto do balão */
 @media (hover:none){
-  .reply-trigger{ opacity:1; width:23px; height:23px; top:-6px; background:var(--panel);}
-  .msg-row.others .reply-trigger{ right:-6px;}
-  .msg-row.mine .reply-trigger{ left:-6px;}
-  .reply-trigger svg{ width:11px; height:11px;}
+  .msg-actions{ opacity:1; flex-direction:row; top:-6px;}
+  .msg-row.others .msg-actions{ right:-6px;}
+  .msg-row.mine .msg-actions{ left:-6px;}
+  .action-btn{ width:23px; height:23px;}
+  .action-btn svg{ width:11px; height:11px;}
 }
 
 /* ---------- barra de resposta ---------- */
@@ -286,9 +313,13 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
       <div class="name-field">
         <input type="text" id="name-display" maxlength="18" disabled>
       </div>
+      <div class="settings-divider"></div>
+      <button class="clear-chat-btn" id="clear-chat-btn" type="button">apagar mensagens anteriores</button>
     </div>
   </div>
 </header>
+
+<div class="join-toast-wrap" id="join-toast-wrap"></div>
 
 <div class="notice">as mensagens ficam disponíveis por 24 horas e depois são apagadas</div>
 
@@ -505,14 +536,39 @@ async function loadInitialMessages(){
   data.forEach(row => messagesById.set(row.id, rowToMsg(row)));
 }
 
+let presenceChannel = null;
 function subscribeRealtime(){
-  supabase
-    .channel('chat_messages_changes')
+  presenceChannel = supabase.channel('chat_messages_changes', {
+    config: { presence: { key: currentUser.id } }
+  });
+  presenceChannel
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
       messagesById.set(payload.new.id, rowToMsg(payload.new));
       render();
     })
-    .subscribe();
+    .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+      if(key === currentUser.id) return; // não avisa a própria entrada pra você mesmo
+      newPresences.forEach(p => showJoinToast(p.name || 'Alguém'));
+    })
+    .subscribe(async (status) => {
+      if(status === 'SUBSCRIBED'){
+        await presenceChannel.track({ name: currentUser.name });
+      }
+    });
+}
+
+/* -------- toast "fulano entrou no chat" -------- */
+const joinToastWrap = document.getElementById('join-toast-wrap');
+function showJoinToast(name){
+  const el = document.createElement('div');
+  el.className = 'join-toast';
+  el.innerHTML = `<span class="dot"></span>${escapeHtml(name)} entrou no chat`;
+  joinToastWrap.appendChild(el);
+  requestAnimationFrame(()=> el.classList.add('show'));
+  setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=> el.remove(), 300);
+  }, 3800);
 }
 
 function purgeExpiredLocal(){
@@ -576,6 +632,11 @@ function messageHtml(msg){
   // mensagens antigas), assim trocar de cor nas configurações reflete na hora
   const color = mine ? colorById(currentUser.colorId) : colorById(msg.userColor);
   const bubbleStyle = mine ? `background:${color.bg};color:${color.text};` : '';
+  const copyBtn = msg.type === 'text' ? `
+      <button class="action-btn copy-trigger" data-copy="${msg.id}" aria-label="Copiar mensagem" title="Copiar mensagem">
+        <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M20 6 9 17l-5-5"/></svg>
+      </button>` : '';
   return `
     <div class="msg-row ${mine ? 'mine' : 'others'}" data-id="${msg.id}">
       <div class="avatar" style="background:${color.bg};color:${color.text}">${initial(msg.userName)}</div>
@@ -583,9 +644,12 @@ function messageHtml(msg){
         ${!mine ? `<span class="sender-name" style="color:${color.bg}">${escapeHtml(msg.userName)}</span>` : ''}
         <div class="bubble" style="${bubbleStyle}">${bubbleContentHtml(msg)}</div>
       </div>
-      <button class="reply-trigger" data-reply="${msg.id}" aria-label="Responder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17l-5-5 5-5M4 12h10a5 5 0 0 1 5 5v2"/></svg>
-      </button>
+      <div class="msg-actions">
+        ${copyBtn}
+        <button class="action-btn reply-trigger" data-reply="${msg.id}" aria-label="Responder" title="Responder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17l-5-5 5-5M4 12h10a5 5 0 0 1 5 5v2"/></svg>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -611,6 +675,23 @@ function attachMessageHandlers(){
       if(msg) startReply(msg);
     });
   });
+  chatArea.querySelectorAll('[data-copy]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const msg = visibleMessages().find(m=>m.id===btn.dataset.copy);
+      if(!msg || msg.type !== 'text') return;
+      const ok = await copyToClipboard(msg.text);
+      if(ok){
+        btn.classList.add('copied');
+        btn.querySelector('.icon-copy').style.display = 'none';
+        btn.querySelector('.icon-check').style.display = 'block';
+        setTimeout(()=>{
+          btn.classList.remove('copied');
+          btn.querySelector('.icon-copy').style.display = 'block';
+          btn.querySelector('.icon-check').style.display = 'none';
+        }, 1200);
+      }
+    });
+  });
   chatArea.querySelectorAll('[data-goto]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const target = chatArea.querySelector(`.msg-row[data-id="${el.dataset.goto}"]`);
@@ -624,6 +705,33 @@ function attachMessageHandlers(){
   });
   chatArea.querySelectorAll('.audio-player').forEach(setupAudioPlayer);
 }
+
+/* copia texto pro clipboard, com fallback pra navegadores/contexts sem
+   suporte à Clipboard API (ex: http sem https) */
+async function copyToClipboard(text){
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    throw new Error('sem clipboard API');
+  }catch(e){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    }catch(err){
+      return false;
+    }
+  }
+}
+
 
 /* -------- player de áudio -------- */
 const allAudioEls = []; // guarda todos os players criados p/ pausar os outros ao tocar um novo
@@ -807,6 +915,17 @@ document.addEventListener('click', (e)=>{
   if(!settingsPop.contains(e.target) && e.target !== settingsBtn) settingsPop.classList.remove('show');
 });
 /* nome é fixo pra sempre — o campo em configurações é só pra consulta */
+
+/* apagar conversa: some com as mensagens anteriores SÓ PRA VOCÊ (não apaga
+   do banco, não mexe na sua conta) — funciona igual entrar de novo agora */
+document.getElementById('clear-chat-btn').addEventListener('click', ()=>{
+  const ok = confirm('Isso esconde todas as mensagens anteriores só pra você. Elas continuam existindo pros outros. Quer continuar?');
+  if(!ok) return;
+  currentUser.joinedAt = Date.now();
+  saveUser(currentUser);
+  settingsPop.classList.remove('show');
+  render();
+});
 
 /* =========================================================
    INIT
