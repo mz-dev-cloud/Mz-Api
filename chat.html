@@ -80,6 +80,7 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
   padding:8px 10px; border-radius:8px; font-size:12.5px; font-family:'Inter',sans-serif;
 }
 .name-field input:focus{ outline:none; border-color:var(--accent);}
+.name-field input:disabled{ opacity:.7; cursor:not-allowed;}
 .name-field button{
   background:var(--accent); color:#171219; border:none; border-radius:8px; padding:0 12px; font-size:11.5px; font-weight:600;
 }
@@ -97,8 +98,17 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
   display:flex; flex-direction:column; gap:2px;
   background:
     radial-gradient(700px 400px at 15% -10%, rgba(201,162,39,.05), transparent 55%),
-    var(--bg);
+    var(--chat-bg-color, var(--bg));
+  transition:background .2s ease;
 }
+.bg-row{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;}
+.bg-swatch{
+  width:28px; height:28px; border-radius:9px; border:2px solid transparent; position:relative;
+  display:flex; align-items:center; justify-content:center;
+}
+.bg-swatch.active{ border-color:var(--ink);}
+.bg-swatch svg{ width:12px; height:12px; color:var(--ink); display:none;}
+.bg-swatch.active svg{ display:block;}
 .chat-area::-webkit-scrollbar{ width:7px;}
 .chat-area::-webkit-scrollbar-thumb{ background:var(--border); border-radius:99px;}
 
@@ -162,7 +172,14 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
 .msg-row.mine .reply-trigger{ left:-32px;}
 .msg-row:hover .reply-trigger{ opacity:1;}
 .reply-trigger svg{ width:12px; height:12px;}
-@media (hover:none){ .reply-trigger{ display:none;} }
+/* em telas touch não existe hover, então o botão de responder fica
+   sempre visível, só que menor e encostado no canto do balão */
+@media (hover:none){
+  .reply-trigger{ opacity:1; width:23px; height:23px; top:-6px; background:var(--panel);}
+  .msg-row.others .reply-trigger{ right:-6px;}
+  .msg-row.mine .reply-trigger{ left:-6px;}
+  .reply-trigger svg{ width:11px; height:11px;}
+}
 
 /* ---------- barra de resposta ---------- */
 .reply-bar{
@@ -232,6 +249,11 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
   font-weight:600; font-size:14px;
 }
 .join-modal .enter-btn:disabled{ opacity:.5;}
+.join-modal .name-warning{
+  display:block; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-faint);
+  margin:-12px 0 16px;
+}
+.join-modal .name-warning svg{ width:11px; height:11px; vertical-align:-1px; margin-right:3px; color:var(--accent);}
 
 @media (max-width:640px){
   .msg-row{ max-width:88%;}
@@ -258,10 +280,11 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
     <div class="settings-pop" id="settings-pop">
       <label>cor do seu balão</label>
       <div class="color-row" id="color-row"></div>
+      <label>fundo da conversa</label>
+      <div class="bg-row" id="bg-row"></div>
       <label>seu nome</label>
       <div class="name-field">
-        <input type="text" id="name-input" maxlength="18">
-        <button id="name-save">salvar</button>
+        <input type="text" id="name-display" maxlength="18" disabled>
       </div>
     </div>
   </div>
@@ -307,6 +330,10 @@ html[data-theme="light"] .icon-btn{ background:rgba(255,255,255,.5);}
     <h2>Entrar no chat</h2>
     <p>Escolha um nome e a cor do seu balão de conversa. Só a letra inicial aparece como seu ícone — sem foto.</p>
     <input type="text" id="join-name" placeholder="Seu nome" maxlength="18">
+    <span class="name-warning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+      Escolha com cuidado — esse nome não poderá ser alterado depois.
+    </span>
     <div class="swatches" id="join-swatches"></div>
     <button class="enter-btn" id="join-btn" disabled>Entrar</button>
   </div>
@@ -344,6 +371,17 @@ const BUBBLE_COLORS = [
   {id:'azul',    bg:'#2a5d8f', text:'#eaf3ff', label:'Azul'},
 ];
 
+/* fundo da área de conversa — cada opção tem uma cor pro tema escuro
+   e uma pro tema claro, pra nunca ficar sem contraste com a fonte */
+const CHAT_BG_PRESETS = [
+  {id:'padrao',  label:'Padrão',  dark:null,      light:null},
+  {id:'grafite', label:'Grafite', dark:'#15181d', light:'#e9e4da'},
+  {id:'azul',    label:'Azul',    dark:'#0f1420', light:'#e3ebf6'},
+  {id:'verde',   label:'Verde',   dark:'#0f1712', light:'#e6efe2'},
+  {id:'vinho',   label:'Vinho',   dark:'#1a1013', light:'#f5e6e8'},
+];
+const STORAGE_CHAT_BG = 'acervo_chat_bg';
+
 /* =========================================================
    TEMA (mesmo padrão usado nas outras páginas do site)
    ========================================================= */
@@ -353,10 +391,38 @@ function applyTheme(t){
   document.querySelector('.icon-moon').style.display = t==='dark' ? 'block':'none';
   document.querySelector('.icon-sun').style.display = t==='light' ? 'block':'none';
   localStorage.setItem('acervo_theme', t);
+  applyChatBg(localStorage.getItem(STORAGE_CHAT_BG) || 'padrao'); // recalcula pro novo tema
+}
+function applyChatBg(id){
+  const preset = CHAT_BG_PRESETS.find(p=>p.id===id) || CHAT_BG_PRESETS[0];
+  const isLight = root.getAttribute('data-theme') === 'light';
+  const hex = isLight ? preset.light : preset.dark;
+  if(hex){ root.style.setProperty('--chat-bg-color', hex); }
+  else{ root.style.removeProperty('--chat-bg-color'); }
+  localStorage.setItem(STORAGE_CHAT_BG, id);
+}
+function buildBgSwatches(container, selectedId){
+  container.innerHTML = CHAT_BG_PRESETS.map(p => {
+    const isLight = root.getAttribute('data-theme') === 'light';
+    const swatchColor = (isLight ? p.light : p.dark) || 'var(--bg-soft)';
+    return `
+    <button type="button" class="bg-swatch${p.id===selectedId?' active':''}" data-bg="${p.id}" title="${p.label}" style="background:${swatchColor}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+    </button>
+  `;}).join('');
+  container.querySelectorAll('.bg-swatch').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      container.querySelectorAll('.bg-swatch').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      applyChatBg(btn.dataset.bg);
+    });
+  });
 }
 applyTheme(localStorage.getItem('acervo_theme') || 'dark');
 document.getElementById('theme-toggle').addEventListener('click', ()=>{
   applyTheme(root.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
+  const bgRow = document.getElementById('bg-row');
+  if(bgRow && bgRow.children.length) buildBgSwatches(bgRow, localStorage.getItem(STORAGE_CHAT_BG) || 'padrao');
 });
 
 /* =========================================================
@@ -501,7 +567,9 @@ function bubbleContentHtml(msg){
 
 function messageHtml(msg){
   const mine = msg.userId === currentUser.id;
-  const color = colorById(msg.userColor);
+  // pras suas próprias mensagens usa sempre a cor ATUAL escolhida (mesmo em
+  // mensagens antigas), assim trocar de cor nas configurações reflete na hora
+  const color = mine ? colorById(currentUser.colorId) : colorById(msg.userColor);
   const bubbleStyle = mine ? `background:${color.bg};color:${color.text};` : '';
   return `
     <div class="msg-row ${mine ? 'mine' : 'others'}" data-id="${msg.id}">
@@ -729,10 +797,7 @@ settingsBtn.addEventListener('click', (e)=>{
 document.addEventListener('click', (e)=>{
   if(!settingsPop.contains(e.target) && e.target !== settingsBtn) settingsPop.classList.remove('show');
 });
-document.getElementById('name-save').addEventListener('click', ()=>{
-  const val = document.getElementById('name-input').value.trim();
-  if(val){ currentUser.name = val; saveUser(currentUser); render(); settingsPop.classList.remove('show'); }
-});
+/* nome é fixo pra sempre — o campo em configurações é só pra consulta */
 
 /* =========================================================
    INIT
@@ -741,7 +806,8 @@ async function initChat(){
   buildSwatches(document.getElementById('color-row'), currentUser.colorId, (id)=>{
     currentUser.colorId = id; saveUser(currentUser); render();
   });
-  document.getElementById('name-input').value = currentUser.name;
+  buildBgSwatches(document.getElementById('bg-row'), localStorage.getItem(STORAGE_CHAT_BG) || 'padrao');
+  document.getElementById('name-display').value = currentUser.name;
   toggleSendMic();
   chatArea.innerHTML = `<div class="empty-chat">Carregando conversa…</div>`;
   await loadInitialMessages();
