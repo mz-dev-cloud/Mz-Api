@@ -554,8 +554,13 @@ function audioPlayerHtml(msg){
 function bubbleContentHtml(msg){
   let quote = '';
   if(msg.replyTo){
+    // "Você" só pode ser decidido na hora de exibir, pra CADA pessoa que
+    // está olhando — nunca gravado como texto fixo, senão vira "Você" pra
+    // todo mundo, mesmo quem não é o dono da mensagem citada.
+    const quoteIsMine = msg.replyTo.userId === currentUser.id;
+    const quoteName = quoteIsMine ? 'Você' : msg.replyTo.userName;
     quote = `<div class="quote-box" data-goto="${msg.replyTo.id}">
-      <div class="q-name">${escapeHtml(msg.replyTo.userName)}</div>
+      <div class="q-name">${escapeHtml(quoteName)}</div>
       <div class="q-snippet">${escapeHtml(msg.replyTo.snippet)}</div>
     </div>`;
   }
@@ -656,8 +661,12 @@ function setupAudioPlayer(el){
    ========================================================= */
 const replyBar = document.getElementById('reply-bar');
 function startReply(msg){
-  replyingTo = { id: msg.id, userName: msg.userId===currentUser.id?'Você':msg.userName, snippet: snippetOf(msg) };
-  document.getElementById('rb-name').textContent = replyingTo.userName;
+  // guarda o userId real + o nome real de quem mandou (nunca a palavra "Você"
+  // fixa) — quem vai ver "Você" ou o nome é decidido na hora de exibir, pra
+  // cada pessoa individualmente, em bubbleContentHtml()
+  const isMine = msg.userId === currentUser.id;
+  replyingTo = { id: msg.id, userId: msg.userId, userName: isMine ? currentUser.name : msg.userName, snippet: snippetOf(msg) };
+  document.getElementById('rb-name').textContent = isMine ? 'Você' : replyingTo.userName;
   document.getElementById('rb-snippet').textContent = replyingTo.snippet;
   replyBar.classList.add('show');
   document.getElementById('text-input').focus();
