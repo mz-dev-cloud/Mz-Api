@@ -185,6 +185,7 @@ async function loadBooks(){
     id: b.id,
     title: b.title,
     category: b.category,
+    cover: b.cover_url || null,
     chapters: chCount[b.id] || 0,
   }));
   render();
@@ -255,7 +256,7 @@ function bookBlockHtml(book){
   return `
     <div class="book-block" data-id="${book.id}">
       <div class="b-cover" style="${coverStyle(book.category)}">
-        <span class="b-fallback">${escapeHtml(book.title)}</span>
+        ${book.cover ? `<img src="${book.cover}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">` : `<span class="b-fallback">${escapeHtml(book.title)}</span>`}
         <button class="b-remove" data-remove="${book.id}" aria-label="Remover da estante">✕</button>
       </div>
       <div class="b-title">${escapeHtml(book.title)}</div>
@@ -279,7 +280,7 @@ const ICON_FLAME = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 function statItemHtml(book, metaText){
   return `
     <div class="stat-item" data-id="${book.id}">
-      <div class="stat-thumb" style="${coverStyle(book.category)}">${initial(book.title)}</div>
+      <div class="stat-thumb" style="${coverStyle(book.category)}${book.cover ? `background-image:url('${book.cover}');background-size:cover;background-position:center;` : ''}">${book.cover ? '' : initial(book.title)}</div>
       <div class="stat-body">
         <div class="stat-title">${escapeHtml(book.title)}</div>
         <div class="stat-meta">${metaText}</div>
