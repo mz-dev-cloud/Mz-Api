@@ -118,6 +118,8 @@ main{ padding:20px clamp(20px,5vw,64px) 80px;}
   justify-content:center; gap:8px; transition:background .2s ease, color .2s ease;
 }
 .add-btn.added{ background:var(--bg-soft); color:var(--accent); border:1px solid var(--accent);}
+.add-btn.secondary{ background:var(--bg-soft); color:var(--ink-soft); border:1px solid var(--border);}
+.add-btn.secondary:hover{ border-color:var(--accent); color:var(--accent);}
 
 @media (max-width:760px){
   header{ flex-wrap:wrap;}
@@ -160,7 +162,8 @@ main{ padding:20px clamp(20px,5vw,64px) 80px;}
       <h2 id="modal-title"></h2>
       <div class="m-pages" id="modal-pages"></div>
       <div class="m-synopsis" id="modal-synopsis"></div>
-      <button class="add-btn" id="add-btn">Adicionar à estante</button>
+      <button class="add-btn" id="read-btn" style="margin-bottom:10px;">Ler agora</button>
+      <button class="add-btn secondary" id="add-btn"></button>
     </div>
   </div>
 </div>
@@ -301,6 +304,7 @@ const modalTitle = document.getElementById('modal-title');
 const modalPages = document.getElementById('modal-pages');
 const modalSynopsis = document.getElementById('modal-synopsis');
 const addBtn = document.getElementById('add-btn');
+const readBtn = document.getElementById('read-btn');
 let currentBook = null;
 
 function openModal(book){
@@ -319,6 +323,9 @@ function updateAddBtn(){
   addBtn.textContent = inEstante ? '✓ Na sua estante' : 'Adicionar à estante';
   addBtn.classList.toggle('added', inEstante);
 }
+readBtn.addEventListener('click', ()=>{
+  window.location.href = `leitor.html?book=${currentBook.id}`;
+});
 addBtn.addEventListener('click', ()=>{
   const ids = getEstante();
   if(!ids.includes(currentBook.id)){
