@@ -17,6 +17,22 @@
   --c-mais18:#4a1f2b; --c-magia:#5b3a6b; --c-romance:#7a2e3d;
   --c-fantasia:#3a4a63; --c-documentarios:#3a3a2a; --c-ficcao:#2e4a4a;
 }
+body.theme-sepia{
+  --bg:#efe3c8; --bg-soft:#e6d7b8; --panel:#e6d7b8;
+  --ink:#3b2f22; --ink-soft:#6b5c47; --ink-faint:#9c8a6d;
+  --border:rgba(59,47,34,.15); --accent:#8a5a2b;
+}
+body.theme-claro{
+  --bg:#ffffff; --bg-soft:#f4f4f4; --panel:#f4f4f4;
+  --ink:#1a1a1a; --ink-soft:#555555; --ink-faint:#999999;
+  --border:rgba(0,0,0,.1); --accent:#a8790e;
+}
+body.theme-preto{
+  --bg:#000000; --bg-soft:#050505; --panel:#0a0a0a;
+  --ink:#e8e8e8; --ink-soft:#8a8a8a; --ink-faint:#555555;
+  --border:rgba(255,255,255,.08); --accent:#c9a227;
+}
+body.theme-sepia, body.theme-claro, body.theme-preto{ background:var(--bg); }
 *{box-sizing:border-box;}
 body{
   margin:0; min-height:100vh; background:
@@ -87,8 +103,52 @@ main{ max-width:720px; margin:0 auto; padding:36px clamp(20px,5vw,40px) 100px;}
 
 .chapter-content{
   font-family:'Fraunces',serif; font-size:17px; line-height:1.85; color:var(--ink);
-  white-space:pre-wrap; word-wrap:break-word; margin-bottom:44px;
+  margin-bottom:44px;
 }
+.ch-para{
+  margin:0 0 22px; padding:2px 6px; margin-left:-6px; border-radius:5px;
+  white-space:pre-wrap; word-wrap:break-word; cursor:pointer; transition:background .15s;
+}
+.ch-para:hover{ background:rgba(201,162,39,.08); }
+.ch-para.marked{
+  background:rgba(255,214,64,.16); box-shadow:inset 3px 0 0 var(--accent);
+}
+.mark-hint{
+  font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-faint);
+  margin-bottom:18px;
+}
+.mark-badge{
+  display:flex; align-items:center; gap:10px; font-family:'JetBrains Mono',monospace; font-size:11.5px;
+  color:var(--accent); background:rgba(201,162,39,.1); border:1px solid rgba(201,162,39,.3);
+  padding:9px 14px; border-radius:9px; margin-bottom:22px; width:fit-content;
+}
+.mark-badge button{
+  background:none; border:none; color:var(--ink-faint); font-size:11.5px; text-decoration:underline;
+  padding:0; font-family:inherit;
+}
+.mark-badge button:hover{ color:var(--accent); }
+
+.top-actions{ display:flex; gap:8px; flex-shrink:0; }
+.settings-wrap{ position:relative; }
+.settings-pop{
+  position:absolute; top:46px; right:0; background:var(--panel); border:1px solid var(--border);
+  border-radius:12px; padding:14px; display:none; flex-direction:column; gap:8px; z-index:60;
+  box-shadow:0 14px 30px -14px rgba(0,0,0,.6); width:190px;
+}
+.settings-pop.open{ display:flex; }
+.settings-pop .st-label{
+  font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-faint);
+}
+.theme-options{ display:flex; gap:8px; }
+.theme-swatch{
+  flex:1; height:38px; border-radius:8px; border:2px solid transparent; cursor:pointer; padding:0;
+}
+.theme-swatch.active{ border-color:var(--accent); }
+.theme-swatch[data-theme="escuro"]{ background:#171219; }
+.theme-swatch[data-theme="sepia"]{ background:#efe3c8; }
+.theme-swatch[data-theme="claro"]{ background:#ffffff; }
+.theme-swatch[data-theme="preto"]{ background:#000000; border:2px solid rgba(255,255,255,.15); }
 
 .read-nav{ display:flex; gap:12px; border-top:1px solid var(--border); padding-top:24px;}
 .nav-btn{
@@ -148,6 +208,35 @@ function getLastChapter(bookId){
   return data[bookId] ? data[bookId].lastChapter : null;
 }
 
+/* ---------------- tema de fundo da leitura (local, por dispositivo) ---------------- */
+function getTheme(){ return localStorage.getItem('acervo_leitor_tema') || 'escuro'; }
+function applyTheme(theme){
+  document.body.classList.remove('theme-sepia','theme-claro','theme-preto');
+  if(theme === 'sepia' || theme === 'claro' || theme === 'preto'){
+    document.body.classList.add('theme-' + theme);
+  }
+  localStorage.setItem('acervo_leitor_tema', theme);
+}
+
+/* ---------------- marca-texto (marca onde a pessoa parou, só local) ---------------- */
+function getMarcadores(){
+  try{ return JSON.parse(localStorage.getItem('acervo_marcadores') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveMarcadores(data){ localStorage.setItem('acervo_marcadores', JSON.stringify(data)); }
+function markerKey(bId, chapterNumber){ return bId + '-' + chapterNumber; }
+function getMarker(bId, chapterNumber){ return getMarcadores()[markerKey(bId, chapterNumber)]; }
+function setMarker(bId, chapterNumber, pIdx){
+  const data = getMarcadores();
+  data[markerKey(bId, chapterNumber)] = pIdx;
+  saveMarcadores(data);
+}
+function removeMarker(bId, chapterNumber){
+  const data = getMarcadores();
+  delete data[markerKey(bId, chapterNumber)];
+  saveMarcadores(data);
+}
+
 /* ---------------- estante (cookie) — usado só pra saber pra onde voltar ---------------- */
 function getCookie(name){
   const match = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
@@ -159,6 +248,16 @@ const params = new URLSearchParams(location.search);
 const bookId = params.get('book');
 let chapterParam = parseInt(params.get('chapter'), 10);
 if(!chapterParam || chapterParam < 1) chapterParam = null;
+
+applyTheme(getTheme());
+
+document.addEventListener('click', (e)=>{
+  const pop = document.getElementById('settings-pop');
+  const btn = document.getElementById('settings-btn');
+  if(pop && pop.classList.contains('open') && !pop.contains(e.target) && e.target !== btn && !btn?.contains(e.target)){
+    pop.classList.remove('open');
+  }
+});
 
 let book = null;
 let chapters = [];
@@ -255,6 +354,21 @@ function renderChapter(idx){
   const hasPrev = idx > 0;
   const hasNext = idx < chapters.length - 1;
 
+  const paragraphs = (chapter.content || '').split(/\n+/).filter(p => p.trim().length > 0);
+  const markedIdx = getMarker(bookId, chapter.chapter_number);
+  const hasMark = markedIdx !== undefined && markedIdx !== null && markedIdx < paragraphs.length;
+
+  const paragraphsHtml = paragraphs.map((p, pIdx) => `
+    <p class="ch-para${hasMark && pIdx === markedIdx ? ' marked' : ''}" data-pidx="${pIdx}">${escapeHtml(p)}</p>
+  `).join('');
+
+  const markSectionHtml = hasMark ? `
+    <div class="mark-badge">
+      🖍️ Marcado onde você parou
+      <button id="remove-mark-btn">remover marca-texto</button>
+    </div>
+  ` : `<div class="mark-hint">Toque em um parágrafo para marcar onde você parou.</div>`;
+
   main.innerHTML = `
     <div class="read-top">
       <div class="r-info">
@@ -262,13 +376,30 @@ function renderChapter(idx){
         <h1>${escapeHtml(book.title)}</h1>
         <div class="r-chapter">Capítulo ${chapter.chapter_number} de ${chapters.length}</div>
       </div>
-      ${chapters.length > 1 ? `
-        <button class="list-btn" id="list-btn" title="Ver capítulos">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      ` : ''}
+      <div class="top-actions">
+        <div class="settings-wrap">
+          <button class="list-btn" id="settings-btn" title="Fundo de leitura">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.04z"/></svg>
+          </button>
+          <div class="settings-pop" id="settings-pop">
+            <div class="st-label">Fundo de leitura</div>
+            <div class="theme-options">
+              <button class="theme-swatch" data-theme="escuro" title="Escuro"></button>
+              <button class="theme-swatch" data-theme="sepia" title="Sépia"></button>
+              <button class="theme-swatch" data-theme="claro" title="Claro"></button>
+              <button class="theme-swatch" data-theme="preto" title="Preto"></button>
+            </div>
+          </div>
+        </div>
+        ${chapters.length > 1 ? `
+          <button class="list-btn" id="list-btn" title="Ver capítulos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        ` : ''}
+      </div>
     </div>
-    <div class="chapter-content">${escapeHtml(chapter.content || '')}</div>
+    ${markSectionHtml}
+    <div class="chapter-content">${paragraphsHtml}</div>
     <div class="read-nav">
       <button class="nav-btn prev" id="prev-btn" ${hasPrev ? '' : 'disabled'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -291,6 +422,52 @@ function renderChapter(idx){
 
   const nextBtn = document.getElementById('next-btn');
   if(hasNext) nextBtn.addEventListener('click', ()=> renderChapter(idx + 1));
+
+  // clique em um parágrafo: marca (ou desmarca, se já for o marcado) onde a pessoa parou
+  main.querySelectorAll('.ch-para').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const pIdx = parseInt(el.dataset.pidx, 10);
+      const current = getMarker(bookId, chapter.chapter_number);
+      if(current === pIdx) removeMarker(bookId, chapter.chapter_number);
+      else setMarker(bookId, chapter.chapter_number, pIdx);
+      const scrollY = window.scrollY;
+      renderChapter(idx);
+      window.scrollTo({ top: scrollY, behavior:'auto' });
+    });
+  });
+
+  const removeMarkBtn = document.getElementById('remove-mark-btn');
+  if(removeMarkBtn) removeMarkBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const scrollY = window.scrollY;
+    removeMarker(bookId, chapter.chapter_number);
+    renderChapter(idx);
+    window.scrollTo({ top: scrollY, behavior:'auto' });
+  });
+
+  // seletor de fundo de leitura
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsPop = document.getElementById('settings-pop');
+  function refreshSwatches(){
+    const current = getTheme();
+    main.querySelectorAll('.theme-swatch').forEach(sw=>{
+      sw.classList.toggle('active', sw.dataset.theme === current);
+    });
+  }
+  refreshSwatches();
+  if(settingsBtn){
+    settingsBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      settingsPop.classList.toggle('open');
+    });
+  }
+  main.querySelectorAll('.theme-swatch').forEach(sw=>{
+    sw.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      applyTheme(sw.dataset.theme);
+      refreshSwatches();
+    });
+  });
 }
 
 init();
