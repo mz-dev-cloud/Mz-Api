@@ -102,9 +102,10 @@ main{ max-width:720px; margin:0 auto; padding:36px clamp(20px,5vw,40px) 100px;}
 .list-btn svg{ width:16px; height:16px;}
 
 .chapter-content{
-  font-family:'Fraunces',serif; font-size:17px; line-height:1.85; color:var(--ink);
+  font-family:'Fraunces',serif; font-size:var(--reader-fs,17px); line-height:1.85; color:var(--ink);
   margin-bottom:44px;
 }
+body.reader-bold .ch-para{ font-weight:600; }
 .ch-para{
   margin:0 0 22px; padding:2px 6px; margin-left:-6px; border-radius:5px;
   white-space:pre-wrap; word-wrap:break-word; cursor:pointer; transition:background .15s;
@@ -122,11 +123,28 @@ main{ max-width:720px; margin:0 auto; padding:36px clamp(20px,5vw,40px) 100px;}
   color:var(--accent); background:rgba(201,162,39,.1); border:1px solid rgba(201,162,39,.3);
   padding:9px 14px; border-radius:9px; margin-bottom:22px; width:fit-content;
 }
+.mark-badge span{ flex-shrink:0; }
+.mark-badge .mb-sep{ color:var(--ink-faint); }
 .mark-badge button{
-  background:none; border:none; color:var(--ink-faint); font-size:11.5px; text-decoration:underline;
-  padding:0; font-family:inherit;
+  background:none; border:none; color:var(--accent); font-size:11.5px; text-decoration:underline;
+  padding:0; font-family:inherit; font-weight:600;
 }
+.mark-badge button#remove-mark-btn{ color:var(--ink-faint); font-weight:400; }
 .mark-badge button:hover{ color:var(--accent); }
+
+.font-size-row{ display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.fs-btn{
+  width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--bg-soft);
+  color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; flex-shrink:0;
+}
+.fs-btn:hover{ border-color:var(--accent); color:var(--accent); }
+.fs-val{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-soft); }
+.bold-toggle{
+  width:100%; padding:9px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-soft);
+  color:var(--ink); font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
+}
+.bold-toggle.active{ border-color:var(--accent); color:var(--accent); background:rgba(201,162,39,.12); }
+.pop-divider{ height:1px; background:var(--border); margin:2px 0; }
 
 .top-actions{ display:flex; gap:8px; flex-shrink:0; }
 .settings-wrap{ position:relative; }
@@ -218,6 +236,21 @@ function applyTheme(theme){
   localStorage.setItem('acervo_leitor_tema', theme);
 }
 
+/* ---------------- zoom do texto (local, por dispositivo) ---------------- */
+function getFontSize(){ return parseInt(localStorage.getItem('acervo_leitor_fonte') || '17', 10); }
+function applyFontSize(px){
+  px = Math.max(14, Math.min(24, px));
+  document.documentElement.style.setProperty('--reader-fs', px + 'px');
+  localStorage.setItem('acervo_leitor_fonte', String(px));
+}
+
+/* ---------------- negrito (local, por dispositivo) ---------------- */
+function getBold(){ return localStorage.getItem('acervo_leitor_negrito') === '1'; }
+function applyBold(on){
+  document.body.classList.toggle('reader-bold', on);
+  localStorage.setItem('acervo_leitor_negrito', on ? '1' : '0');
+}
+
 /* ---------------- marca-texto (marca onde a pessoa parou, só local) ---------------- */
 function getMarcadores(){
   try{ return JSON.parse(localStorage.getItem('acervo_marcadores') || '{}'); }
@@ -250,6 +283,8 @@ let chapterParam = parseInt(params.get('chapter'), 10);
 if(!chapterParam || chapterParam < 1) chapterParam = null;
 
 applyTheme(getTheme());
+applyFontSize(getFontSize());
+applyBold(getBold());
 
 document.addEventListener('click', (e)=>{
   const pop = document.getElementById('settings-pop');
@@ -364,8 +399,10 @@ function renderChapter(idx){
 
   const markSectionHtml = hasMark ? `
     <div class="mark-badge">
-      🖍️ Marcado onde você parou
-      <button id="remove-mark-btn">remover marca-texto</button>
+      <span>🖍️ Marcado onde você parou</span>
+      <button id="goto-mark-btn">ir até lá</button>
+      <span class="mb-sep">·</span>
+      <button id="remove-mark-btn">remover</button>
     </div>
   ` : `<div class="mark-hint">Toque em um parágrafo para marcar onde você parou.</div>`;
 
@@ -389,6 +426,15 @@ function renderChapter(idx){
               <button class="theme-swatch" data-theme="claro" title="Claro"></button>
               <button class="theme-swatch" data-theme="preto" title="Preto"></button>
             </div>
+            <div class="pop-divider"></div>
+            <div class="st-label">Tamanho do texto</div>
+            <div class="font-size-row">
+              <button class="fs-btn" id="fs-dec" title="Diminuir">A-</button>
+              <span class="fs-val" id="fs-val">17px</span>
+              <button class="fs-btn" id="fs-inc" title="Aumentar">A+</button>
+            </div>
+            <div class="pop-divider"></div>
+            <button class="bold-toggle" id="bold-toggle">Negrito</button>
           </div>
         </div>
         ${chapters.length > 1 ? `
@@ -445,6 +491,13 @@ function renderChapter(idx){
     window.scrollTo({ top: scrollY, behavior:'auto' });
   });
 
+  const gotoMarkBtn = document.getElementById('goto-mark-btn');
+  if(gotoMarkBtn) gotoMarkBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const target = main.querySelector('.ch-para.marked');
+    if(target) target.scrollIntoView({ behavior:'smooth', block:'center' });
+  });
+
   // seletor de fundo de leitura
   const settingsBtn = document.getElementById('settings-btn');
   const settingsPop = document.getElementById('settings-pop');
@@ -454,7 +507,15 @@ function renderChapter(idx){
       sw.classList.toggle('active', sw.dataset.theme === current);
     });
   }
+  function refreshFontVal(){
+    document.getElementById('fs-val').textContent = getFontSize() + 'px';
+  }
+  function refreshBoldToggle(){
+    document.getElementById('bold-toggle').classList.toggle('active', getBold());
+  }
   refreshSwatches();
+  refreshFontVal();
+  refreshBoldToggle();
   if(settingsBtn){
     settingsBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -467,6 +528,21 @@ function renderChapter(idx){
       applyTheme(sw.dataset.theme);
       refreshSwatches();
     });
+  });
+  document.getElementById('fs-dec').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    applyFontSize(getFontSize() - 1);
+    refreshFontVal();
+  });
+  document.getElementById('fs-inc').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    applyFontSize(getFontSize() + 1);
+    refreshFontVal();
+  });
+  document.getElementById('bold-toggle').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    applyBold(!getBold());
+    refreshBoldToggle();
   });
 }
 
