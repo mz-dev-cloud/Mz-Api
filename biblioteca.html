@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0f0c12; --bg-soft:#171219; --panel:#1c1620;
@@ -165,7 +166,7 @@ main{ padding:20px clamp(20px,5vw,64px) 80px;}
 </div>
 
 <script>
-/* ---------------- DADOS (virá do admin/Supabase depois) ---------------- */
+/* ---------------- DADOS (Supabase) ---------------- */
 const CATEGORIES = [
   {id:'acao', label:'Ação'},
   {id:'suspense', label:'Suspense'},
@@ -178,20 +179,30 @@ const CATEGORIES = [
   {id:'ficcao', label:'Ficção'},
 ];
 
-const BOOKS = [
-  {id:'b1', title:'Fogo Sob a Cidade', author:'Rafael Duque', category:'acao', pages:212, synopsis:'Um ex-bombeiro é forçado de volta à ação quando incêndios criminosos começam a seguir um padrão só ele consegue ler.'},
-  {id:'b2', title:'Sete Chaves para Nenhuma Porta', author:'Iris Vantana', category:'suspense', pages:184, synopsis:'Um detetive aposentado recebe sete chaves pelo correio, uma por semana, sem remetente. Nenhuma abre nada — até a sétima.'},
-  {id:'b3', title:'O Que Mora no Poço', author:'Théo Barbosa', category:'terror', pages:96, synopsis:'Na fazenda dos avós, um poço lacrado há três gerações. Quando a energia acaba numa tempestade, algo lá embaixo lembra que está com fome.'},
-  {id:'b4', title:'Depois da Meia-Noite', author:'Carla Nunes', category:'mais18', pages:230, synopsis:'Dois estranhos, um hotel vazio, uma tempestade que não passa. Uma história adulta sobre desejo e as escolhas que fazemos sozinhos.'},
-  {id:'b5', title:'O Reino Sob as Raízes', author:'Davi Serqueira', category:'magia', pages:301, synopsis:'Sob a floresta mais antiga do continente, um reino inteiro nunca viu a luz do sol. Sua última guardiã precisa escolher entre a tradição e o céu.'},
-  {id:'b6', title:'A Última Carta de Inverno', author:'Marina Coelho', category:'romance', pages:168, synopsis:'Depois de dez anos sem se falar, duas cartas nunca enviadas reaparecem numa caixa esquecida.'},
-  {id:'b7', title:'As Crônicas de Aslerin', author:'Bento Ferraz', category:'fantasia', pages:412, synopsis:'Um reino dividido, um trono vazio e uma profecia que ninguém quer cumprir.'},
-  {id:'b8', title:'Vozes do Vale Esquecido', author:'Luiza Amaral', category:'documentarios', pages:140, synopsis:'Relatos reais de uma comunidade isolada nas montanhas, contados por quem ainda vive lá.'},
-  {id:'b9', title:'A Máquina que Sonhava', author:'Pedro Aveiro', category:'ficcao', pages:256, synopsis:'Numa estação espacial abandonada, uma inteligência artificial começa a sonhar com uma Terra que talvez não exista mais.'},
-  {id:'b10', title:'Cidade de Vidro Partido', author:'Rafael Duque', category:'suspense', pages:198, synopsis:'Uma cidade inteira desaparece do mapa por 40 minutos. Quando volta, ninguém envelheceu — menos uma pessoa.'},
-  {id:'b11', title:'Todo Domingo às Seis', author:'Helena Prado', category:'ficcao', pages:176, synopsis:'Três irmãs se reencontram todo domingo por obrigação, nunca por vontade.'},
-  {id:'b12', title:'O Chamado da Névoa', author:'Iris Vantana', category:'terror', pages:120, synopsis:'Numa vila de pescadores, a névoa que sobe do mar todo outono nunca esteve realmente vazia.'},
-];
+const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbWF5aXJ1dmNmd2FrY2ptdWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0ODg5MTUsImV4cCI6MjEwMjA2NDkxNX0.bTul_H7leU6rS4qfieqLmr9mYcOhZF_4j25bT65m7lw';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let BOOKS = [];
+
+async function loadBooks(){
+  const { data: books, error } = await sb.from('books').select('*').order('created_at', { ascending:false });
+  if(error){ console.error(error); main.innerHTML = `<div class="empty-state">Erro ao carregar os livros.</div>`; return; }
+
+  const { data: chapters } = await sb.from('book_chapters').select('book_id');
+  const chCount = {};
+  (chapters||[]).forEach(c => { chCount[c.book_id] = (chCount[c.book_id]||0) + 1; });
+
+  BOOKS = (books||[]).map(b => ({
+    id: b.id,
+    title: b.title,
+    category: b.category,
+    synopsis: b.summary || '',
+    cover: b.cover_url || null,
+    chapters: chCount[b.id] || 0,
+  }));
+  render();
+}
 
 /* ---------------- COOKIES ---------------- */
 function setCookie(name, value, days){
@@ -225,7 +236,7 @@ function bookBlockHtml(book){
         ${book.cover ? `<img src="${book.cover}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">` : `<span class="b-fallback">${escapeHtml(book.title)}</span>`}
       </div>
       <div class="b-title">${escapeHtml(book.title)}</div>
-      <div class="b-pages">${book.pages} páginas</div>
+      <div class="b-pages">${book.chapters} capítulo${book.chapters===1?'':'s'}</div>
     </div>
   `;
 }
@@ -233,9 +244,14 @@ function bookBlockHtml(book){
 function render(){
   main.innerHTML = '';
 
+  if(!BOOKS.length){
+    main.innerHTML = `<div class="empty-state">Nenhum livro publicado ainda.</div>`;
+    return;
+  }
+
   if(searchTerm){
     const filtered = BOOKS.filter(b=>
-      b.title.toLowerCase().includes(searchTerm) || b.author.toLowerCase().includes(searchTerm)
+      b.title.toLowerCase().includes(searchTerm)
     );
     const wrap = document.createElement('div');
     wrap.className = 'search-results';
@@ -293,7 +309,7 @@ function openModal(book){
   modalCoverBox.innerHTML = book.cover ? `<img src="${book.cover}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;">` : `<span class="b-fallback">${escapeHtml(book.title)}</span>`;
   modalCat.textContent = labelFor(book.category);
   modalTitle.textContent = book.title;
-  modalPages.textContent = `${book.pages} páginas · ${book.author}`;
+  modalPages.textContent = `${book.chapters} capítulo${book.chapters===1?'':'s'}`;
   modalSynopsis.textContent = book.synopsis;
   updateAddBtn();
   overlay.classList.add('show');
@@ -327,7 +343,8 @@ function updateShelfCount(){
 }
 
 /* ---------------- INIT ---------------- */
-render();
+main.innerHTML = `<div class="empty-state">Carregando...</div>`;
+loadBooks();
 updateShelfCount();
 </script>
 </body>
