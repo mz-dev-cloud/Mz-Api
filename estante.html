@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0f0c12; --bg-soft:#171219; --panel:#1c1620;
@@ -166,20 +167,28 @@ const CATEGORIES = [
   {id:'fantasia', label:'Fantasia'}, {id:'documentarios', label:'Documentários'}, {id:'ficcao', label:'Ficção'},
 ];
 
-const BOOKS = [
-  {id:'b1', title:'Fogo Sob a Cidade', author:'Rafael Duque', category:'acao', pages:212},
-  {id:'b2', title:'Sete Chaves para Nenhuma Porta', author:'Iris Vantana', category:'suspense', pages:184},
-  {id:'b3', title:'O Que Mora no Poço', author:'Théo Barbosa', category:'terror', pages:96},
-  {id:'b4', title:'Depois da Meia-Noite', author:'Carla Nunes', category:'mais18', pages:230},
-  {id:'b5', title:'O Reino Sob as Raízes', author:'Davi Serqueira', category:'magia', pages:301},
-  {id:'b6', title:'A Última Carta de Inverno', author:'Marina Coelho', category:'romance', pages:168},
-  {id:'b7', title:'As Crônicas de Aslerin', author:'Bento Ferraz', category:'fantasia', pages:412},
-  {id:'b8', title:'Vozes do Vale Esquecido', author:'Luiza Amaral', category:'documentarios', pages:140},
-  {id:'b9', title:'A Máquina que Sonhava', author:'Pedro Aveiro', category:'ficcao', pages:256},
-  {id:'b10', title:'Cidade de Vidro Partido', author:'Rafael Duque', category:'suspense', pages:198},
-  {id:'b11', title:'Todo Domingo às Seis', author:'Helena Prado', category:'ficcao', pages:176},
-  {id:'b12', title:'O Chamado da Névoa', author:'Iris Vantana', category:'terror', pages:120},
-];
+const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbWF5aXJ1dmNmd2FrY2ptdWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0ODg5MTUsImV4cCI6MjEwMjA2NDkxNX0.bTul_H7leU6rS4qfieqLmr9mYcOhZF_4j25bT65m7lw';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let BOOKS = [];
+
+async function loadBooks(){
+  const { data: books, error } = await sb.from('books').select('*');
+  if(error){ console.error(error); return; }
+
+  const { data: chapters } = await sb.from('book_chapters').select('book_id');
+  const chCount = {};
+  (chapters||[]).forEach(c => { chCount[c.book_id] = (chCount[c.book_id]||0) + 1; });
+
+  BOOKS = (books||[]).map(b => ({
+    id: b.id,
+    title: b.title,
+    category: b.category,
+    chapters: chCount[b.id] || 0,
+  }));
+  render();
+}
 
 /* ---------------- ESTANTE (cookie) ---------------- */
 function getCookie(name){
@@ -250,7 +259,7 @@ function bookBlockHtml(book){
         <button class="b-remove" data-remove="${book.id}" aria-label="Remover da estante">✕</button>
       </div>
       <div class="b-title">${escapeHtml(book.title)}</div>
-      <div class="b-pages">${book.pages} páginas</div>
+      <div class="b-pages">${book.chapters} capítulo${book.chapters===1?'':'s'}</div>
     </div>
   `;
 }
@@ -333,7 +342,7 @@ function render(){
   if(searchTerm){
     statBoxesEl.innerHTML = '';
     const filtered = books.filter(b =>
-      b.title.toLowerCase().includes(searchTerm) || b.author.toLowerCase().includes(searchTerm)
+      b.title.toLowerCase().includes(searchTerm)
     );
     let html = `<div class="search-results"><h2>${filtered.length} resultado${filtered.length===1?'':'s'} para "${escapeHtml(searchTerm)}"</h2>`;
     html += filtered.length
@@ -388,7 +397,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
   render();
 });
 
-render();
+loadBooks();
 </script>
 </body>
 </html>
