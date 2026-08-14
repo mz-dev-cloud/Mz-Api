@@ -272,6 +272,18 @@ function labelFor(catId){ return (CATEGORIES.find(c=>c.id===catId)||{}).label ||
 function coverStyle(catId){ return `background:linear-gradient(160deg, var(--c-${catId}), #14101a);`; }
 function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 function uid(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2); }
+function sanitizeFileName(name){
+  const dot = name.lastIndexOf('.');
+  const base = dot > -1 ? name.slice(0, dot) : name;
+  const ext = dot > -1 ? name.slice(dot) : '';
+  const cleanBase = base
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // tira acentos
+    .replace(/[^a-zA-Z0-9]+/g, '-') // troca tudo que não for letra/número por hífen
+    .replace(/^-+|-+$/g, '') // tira hífens nas pontas
+    .slice(0, 60);
+  const cleanExt = ext.replace(/[^a-zA-Z0-9.]/g, '');
+  return (cleanBase || 'arquivo') + cleanExt;
+}
 
 let chapterBlocks = [];
 let coverFile = null;
@@ -391,7 +403,7 @@ async function publishBook(){
   try{
     let coverUrl = null;
     if(coverFile){
-      const path = `${uid()}-${coverFile.name}`;
+      const path = `${uid()}-${sanitizeFileName(coverFile.name)}`;
       const { error: upErr } = await supabase.storage.from(COVER_BUCKET).upload(path, coverFile);
       if(upErr) throw upErr;
       coverUrl = supabase.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
@@ -399,7 +411,7 @@ async function publishBook(){
 
     let musicUrl = null;
     if(musicFile){
-      const mpath = `${uid()}-${musicFile.name}`;
+      const mpath = `${uid()}-${sanitizeFileName(musicFile.name)}`;
       const { error: mupErr } = await supabase.storage.from(MUSIC_BUCKET).upload(mpath, musicFile);
       if(mupErr) throw mupErr;
       musicUrl = supabase.storage.from(MUSIC_BUCKET).getPublicUrl(mpath).data.publicUrl;
