@@ -176,6 +176,28 @@ body.reader-bold .ch-para{ font-weight:600; }
 .nav-btn.next{ justify-content:flex-end; background:var(--accent); color:#171219; border:none; font-weight:600;}
 .nav-btn:disabled{ opacity:.35; cursor:not-allowed;}
 .nav-btn svg{ width:15px; height:15px; flex-shrink:0;}
+
+/* ---------- player de trilha sonora ---------- */
+.music-player{
+  position:fixed; bottom:20px; right:20px; z-index:90; display:none; align-items:center; gap:8px;
+  background:rgba(23,18,25,.85); backdrop-filter:blur(10px); border:1px solid var(--border);
+  border-radius:999px; padding:7px; box-shadow:0 14px 30px -14px rgba(0,0,0,.75);
+}
+.music-btn, .music-btn-restart{
+  border:none; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.music-btn{ width:42px; height:42px; background:var(--accent); color:#171219; }
+.music-btn svg{ width:18px; height:18px; }
+.music-btn-restart{
+  width:34px; height:34px; background:none; color:var(--ink-soft); border:1px solid var(--border);
+}
+.music-btn-restart svg{ width:14px; height:14px; }
+.music-btn-restart:hover{ color:var(--accent); border-color:var(--accent); }
+.music-player.needs-tap .music-btn{ animation:music-pulse 1.6s infinite; }
+@keyframes music-pulse{
+  0%,100%{ box-shadow:0 0 0 0 rgba(201,162,39,.55); }
+  50%{ box-shadow:0 0 0 9px rgba(201,162,39,0); }
+}
 </style>
 </head>
 <body>
@@ -191,6 +213,17 @@ body.reader-bold .ch-para{ font-weight:600; }
 <main id="main">
   <div class="state-loading">Carregando...</div>
 </main>
+
+<div class="music-player" id="music-player">
+  <button class="music-btn-restart" id="music-restart" title="Voltar do início">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+  </button>
+  <button class="music-btn" id="music-toggle" title="Tocar/pausar trilha sonora">
+    <svg id="music-icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+    <svg id="music-icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+  </button>
+</div>
+<audio id="book-audio" preload="auto"></audio>
 
 <script>
 const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
@@ -270,6 +303,50 @@ function removeMarker(bId, chapterNumber){
   saveMarcadores(data);
 }
 
+/* ---------------- trilha sonora do livro ---------------- */
+function setupMusicPlayer(musicUrl){
+  const player = document.getElementById('music-player');
+  const audioEl = document.getElementById('book-audio');
+  if(!musicUrl){ player.style.display = 'none'; return; }
+
+  audioEl.src = musicUrl;
+  audioEl.loop = true;
+  player.style.display = 'flex';
+
+  const playIcon = document.getElementById('music-icon-play');
+  const pauseIcon = document.getElementById('music-icon-pause');
+
+  function updateIcon(){
+    const playing = !audioEl.paused;
+    playIcon.style.display = playing ? 'none' : 'block';
+    pauseIcon.style.display = playing ? 'block' : 'none';
+  }
+
+  audioEl.play().then(()=>{
+    player.classList.remove('needs-tap');
+    updateIcon();
+  }).catch(()=>{
+    // navegador bloqueou o autoplay com som — espera o toque no botão
+    player.classList.add('needs-tap');
+    updateIcon();
+  });
+
+  document.getElementById('music-toggle').addEventListener('click', ()=>{
+    player.classList.remove('needs-tap');
+    if(audioEl.paused) audioEl.play().catch(()=>{});
+    else audioEl.pause();
+  });
+
+  document.getElementById('music-restart').addEventListener('click', ()=>{
+    player.classList.remove('needs-tap');
+    audioEl.currentTime = 0;
+    if(audioEl.paused) audioEl.play().catch(()=>{});
+  });
+
+  audioEl.addEventListener('play', updateIcon);
+  audioEl.addEventListener('pause', updateIcon);
+}
+
 /* ---------------- estante (cookie) — usado só pra saber pra onde voltar ---------------- */
 function getCookie(name){
   const match = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
@@ -325,6 +402,8 @@ async function init(){
   // referência ativada na estante -> volta pra estante; senão, biblioteca
   const backLink = document.getElementById('back-link');
   if(document.referrer.includes('estante.html')) backLink.href = 'estante.html';
+
+  setupMusicPlayer(book.music_url);
 
   if(chapterParam){
     const idx = chapters.findIndex(c => c.chapter_number === chapterParam);
