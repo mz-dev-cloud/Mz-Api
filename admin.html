@@ -91,6 +91,8 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
 }
 .file-btn:hover{ border-color:var(--accent); color:var(--accent);}
 .cover-upload input[type=file]{ display:none;}
+.music-preview{ width:130px; height:52px; flex:0 0 130px; }
+.music-preview .ph{ font-size:9.5px; padding:6px; word-break:break-all;}
 
 /* capítulos */
 .chapters-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px;}
@@ -201,6 +203,17 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
     </div>
 
     <div class="field">
+      <label>Trilha sonora do livro (opcional)</label>
+      <div class="cover-upload">
+        <div class="cover-preview music-preview" id="music-preview"><span class="ph">sem trilha</span></div>
+        <label class="file-btn">
+          Escolher áudio (mp3)
+          <input type="file" id="f-music" accept="audio/*">
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
       <label>Capítulos (texto puro)</label>
       <div class="chapters-list" id="chapters-list"></div>
       <button class="add-chapter-btn" id="add-chapter-btn">+ Adicionar capítulo</button>
@@ -226,6 +239,7 @@ h2.section-title{ font-family:'Fraunces',serif; font-weight:600; font-size:22px;
 const SUPABASE_URL = 'https://xdmayiruvcfwakcjmuay.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbWF5aXJ1dmNmd2FrY2ptdWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0ODg5MTUsImV4cCI6MjEwMjA2NDkxNX0.bTul_H7leU6rS4qfieqLmr9mYcOhZF_4j25bT65m7lw';
 const COVER_BUCKET = 'book-covers';
+const MUSIC_BUCKET = 'book-music';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* =========================================================
@@ -261,6 +275,7 @@ function uid(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now
 
 let chapterBlocks = [];
 let coverFile = null;
+let musicFile = null;
 let booted = false;
 
 async function tryUnlock(){
@@ -310,6 +325,13 @@ function boot(){
     coverFile = file;
     const url = URL.createObjectURL(file);
     document.getElementById('cover-preview').innerHTML = `<img src="${url}">`;
+  });
+
+  document.getElementById('f-music').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    musicFile = file;
+    document.getElementById('music-preview').innerHTML = `<span class="ph">${escapeHtml(file.name)}</span>`;
   });
 
   document.getElementById('add-chapter-btn').addEventListener('click', addChapterBlock);
@@ -375,9 +397,17 @@ async function publishBook(){
       coverUrl = supabase.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
     }
 
+    let musicUrl = null;
+    if(musicFile){
+      const mpath = `${uid()}-${musicFile.name}`;
+      const { error: mupErr } = await supabase.storage.from(MUSIC_BUCKET).upload(mpath, musicFile);
+      if(mupErr) throw mupErr;
+      musicUrl = supabase.storage.from(MUSIC_BUCKET).getPublicUrl(mpath).data.publicUrl;
+    }
+
     const { data: bookRow, error: bookErr } = await supabase
       .from('books')
-      .insert({ title, category, summary, cover_url: coverUrl })
+      .insert({ title, category, summary, cover_url: coverUrl, music_url: musicUrl })
       .select().single();
     if(bookErr) throw bookErr;
 
@@ -395,6 +425,9 @@ async function publishBook(){
     document.getElementById('cover-preview').innerHTML = '<span class="ph">sem capa</span>';
     coverFile = null;
     document.getElementById('f-cover').value = '';
+    document.getElementById('music-preview').innerHTML = '<span class="ph">sem trilha</span>';
+    musicFile = null;
+    document.getElementById('f-music').value = '';
     chapterBlocks = [];
     addChapterBlock();
     loadBooks();
@@ -432,7 +465,7 @@ function pubBookHtml(book, chapters){
         </div>
         <div class="pub-info">
           <div class="pub-title">${escapeHtml(book.title)}</div>
-          <div class="pub-meta">${labelFor(book.category)} · ${chapters.length} capítulo${chapters.length===1?'':'s'}</div>
+          <div class="pub-meta">${labelFor(book.category)} · ${chapters.length} capítulo${chapters.length===1?'':'s'}${book.music_url ? ' · 🎵' : ''}</div>
         </div>
         <div class="pub-actions">
           <button class="icon-btn-sm" data-delete="${book.id}" title="Apagar">
