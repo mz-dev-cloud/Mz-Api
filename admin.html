@@ -354,7 +354,12 @@ logoutLink.addEventListener('click', async (e)=>{
    Se a sessão pertencer a outro e-mail, ela não passa nas policies
    do banco mesmo assim — mas nem deixamos passar pela UI. */
 (async () => {
-  const { data: { session } } = await supabase.auth.getSession();
+  let { data: { session } } = await supabase.auth.getSession();
+  if(session){
+    // testa se o token ainda é aceito; se não, limpa a sessão vencida
+    const { error: uErr } = await supabase.auth.getUser();
+    if(uErr){ await supabase.auth.signOut(); session = null; }
+  }
   if(session && session.user.email === ADMIN_EMAIL){
     gate.remove();
     if(!booted){ booted = true; boot(); }
